@@ -6,10 +6,28 @@ const admin = require('firebase-admin');
 const OpenAI = require('openai');
 const multer = require('multer');
 const path = require('path');
+const http = require('http');
+const socketIo = require('socket.io');
+const WebSocket = require('ws');
+const fs = require('fs').promises;
+const { v4: uuidv4 } = require('uuid');
+const JSZip = require('jszip');
+const archiver = require('archiver');
+const { VM } = require('vm2');
+const axios = require('axios');
+const compression = require('compression');
+const morgan = require('morgan');
 require('dotenv').config();
 
 // Initialize Express app
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+    cors: {
+        origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+        methods: ['GET', 'POST']
+    }
+});
 const PORT = process.env.PORT || 3000;
 
 // Initialize Firebase Admin
@@ -35,19 +53,26 @@ admin.initializeApp({
 const db = admin.database();
 const storage = admin.storage();
 
-// Initialize OpenAI
+// Initialize OpenAI (Fallback)
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'your-openai-api-key-here'
 });
 
+// Gemini API Configuration
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+
 // Middleware
 app.use(helmet());
+app.use(compression());
+app.use(morgan('combined'));
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.static('frontend/dist'));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -165,6 +190,169 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         version: '1.0.0'
     });
+});
+
+// Code Execution endpoint
+app.post('/api/execute', authenticateToken, async (req, res) => {
+    try {
+        const { code, language = 'javascript' } = req.body;
+
+        if (!code || !code.trim()) {
+            return res.status(400).json({ error: 'Code is required' });
+        }
+
+        let result = '';
+        let error = '';
+
+        try {
+            if (language === 'javascript') {
+                const vm = new VM({
+                    timeout: parseInt(process.env.CODE_TIMEOUT) || 30000,
+                    sandbox: {
+                        console: {
+                            log: (...args) => {
+                                result += args.map(arg => 
+                                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                                ).join(' ') + '\n';
+                            }
+                        }
+                    }
+                });
+
+                const output = vm.run(code);
+                if (output !== undefined) {
+                    result += String(output);
+                }
+            } else {
+                // For other languages, we could implement Docker containers or external services
+                result = `Language ${language} execution not yet implemented. Only JavaScript is currently supported.`;
+            }
+
+        } catch (execError) {
+            error = execError.message;
+        }
+
+        res.json({
+            success: true,
+            result: result,
+            error: error,
+            language: language,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Code execution error:', error);
+        res.status(500).json({ error: 'Failed to execute code' });
+    }
+});
+
+// File System endpoints
+app.get('/api/files/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const projectPath = path.join(process.env.UPLOAD_DIR || 'uploads', req.user.uid, projectId);
+        
+        try {
+            await fs.access(projectPath);
+        } catch {
+            await fs.mkdir(projectPath, { recursive: true });
+        }
+
+        const files = await getFileTree(projectPath);
+        res.json({
+            success: true,
+            files: files
+        });
+
+    } catch (error) {
+        console.error('Get files error:', error);
+        res.status(500).json({ error: 'Failed to fetch files' });
+    }
+});
+
+app.post('/api/files/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { fileName, content, path: filePath } = req.body;
+        
+        const projectDir = path.join(process.env.UPLOAD_DIR || 'uploads', req.user.uid, projectId);
+        const fullPath = path.join(projectDir, filePath || '', fileName);
+        
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.writeFile(fullPath, content || '');
+
+        res.json({
+            success: true,
+            message: 'File created successfully'
+        });
+
+    } catch (error) {
+        console.error('Create file error:', error);
+        res.status(500).json({ error: 'Failed to create file' });
+    }
+});
+
+app.put('/api/files/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { fileName, content, path: filePath } = req.body;
+        
+        const projectDir = path.join(process.env.UPLOAD_DIR || 'uploads', req.user.uid, projectId);
+        const fullPath = path.join(projectDir, filePath || '', fileName);
+        
+        await fs.writeFile(fullPath, content || '');
+
+        res.json({
+            success: true,
+            message: 'File updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Update file error:', error);
+        res.status(500).json({ error: 'Failed to update file' });
+    }
+});
+
+app.delete('/api/files/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { fileName, path: filePath } = req.body;
+        
+        const projectDir = path.join(process.env.UPLOAD_DIR || 'uploads', req.user.uid, projectId);
+        const fullPath = path.join(projectDir, filePath || '', fileName);
+        
+        await fs.unlink(fullPath);
+
+        res.json({
+            success: true,
+            message: 'File deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete file error:', error);
+        res.status(500).json({ error: 'Failed to delete file' });
+    }
+});
+
+// Export project as ZIP
+app.get('/api/export/:projectId', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const projectDir = path.join(process.env.UPLOAD_DIR || 'uploads', req.user.uid, projectId);
+        
+        const zip = new JSZip();
+        await addDirectoryToZip(zip, projectDir, '');
+        
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+        
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${projectId}.zip"`);
+        res.send(zipBuffer);
+
+    } catch (error) {
+        console.error('Export project error:', error);
+        res.status(500).json({ error: 'Failed to export project' });
+    }
 });
 
 // AI Chat endpoint
@@ -496,6 +684,34 @@ app.get('/api/admin/stats', authenticateToken, authenticateAdmin, async (req, re
     }
 });
 
+// Gemini API Helper Functions
+async function getGeminiResponse(message, context = '') {
+    try {
+        if (!GEMINI_API_KEY) {
+            throw new Error('Gemini API key not configured');
+        }
+
+        const response = await axios.post(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+            contents: [{
+                parts: [{
+                    text: `${context ? `Context: ${context}\n\n` : ''}User: ${message}\n\nAssistant:`
+                }]
+            }],
+            generationConfig: {
+                temperature: 0.7,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 1024,
+            }
+        });
+
+        return response.data.candidates[0].content.parts[0].text;
+    } catch (error) {
+        console.error('Gemini API error:', error);
+        throw error;
+    }
+}
+
 // Helper functions
 async function getAIResponse(message, userId, model = 'gpt-3.5-turbo') {
     try {
@@ -514,26 +730,33 @@ async function getAIResponse(message, userId, model = 'gpt-3.5-turbo') {
             ).join('\n');
         }
 
-        const completion = await openai.chat.completions.create({
-            model: model,
-            messages: [
-                {
-                    role: 'system',
-                    content: `You are Relosity AI, an advanced Arabic AI assistant. You help users with various tasks including answering questions, providing information, creative writing, problem-solving, and more. Always respond in Arabic unless specifically asked to use another language. Be helpful, accurate, and engaging.${context ? '\n\nPrevious conversation context:\n' + context : ''}`
-                },
-                {
-                    role: 'user',
-                    content: message
-                }
-            ],
-            max_tokens: 1000,
-            temperature: 0.7
-        });
+        // Try Gemini first, fallback to OpenAI
+        try {
+            return await getGeminiResponse(message, context);
+        } catch (geminiError) {
+            console.log('Gemini failed, trying OpenAI fallback:', geminiError.message);
+            
+            const completion = await openai.chat.completions.create({
+                model: model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: `You are Replit AI, an advanced Arabic AI coding assistant. You help users with coding, debugging, explaining code, and programming tasks. Always respond in Arabic unless specifically asked to use another language. Be helpful, accurate, and engaging.${context ? '\n\nPrevious conversation context:\n' + context : ''}`
+                    },
+                    {
+                        role: 'user',
+                        content: message
+                    }
+                ],
+                max_tokens: 1000,
+                temperature: 0.7
+            });
 
-        return completion.choices[0].message.content;
+            return completion.choices[0].message.content;
+        }
 
     } catch (error) {
-        console.error('OpenAI API error:', error);
+        console.error('AI API error:', error);
         
         // Fallback responses in Arabic
         const fallbackResponses = [
@@ -547,9 +770,57 @@ async function getAIResponse(message, userId, model = 'gpt-3.5-turbo') {
     }
 }
 
+// File System Helper Functions
+async function getFileTree(dirPath, basePath = '') {
+    const items = [];
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const relativePath = path.join(basePath, entry.name);
+        
+        if (entry.isDirectory()) {
+            const children = await getFileTree(fullPath, relativePath);
+            items.push({
+                name: entry.name,
+                type: 'directory',
+                path: relativePath,
+                children: children
+            });
+        } else {
+            const stats = await fs.stat(fullPath);
+            items.push({
+                name: entry.name,
+                type: 'file',
+                path: relativePath,
+                size: stats.size,
+                modified: stats.mtime
+            });
+        }
+    }
+    
+    return items;
+}
+
+async function addDirectoryToZip(zip, dirPath, zipPath) {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const zipFilePath = path.join(zipPath, entry.name);
+        
+        if (entry.isDirectory()) {
+            await addDirectoryToZip(zip, fullPath, zipFilePath);
+        } else {
+            const content = await fs.readFile(fullPath);
+            zip.file(zipFilePath, content);
+        }
+    }
+}
+
 function generateApiKey() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'rel_';
+    let result = 'repl_';
     for (let i = 0; i < 32; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -604,11 +875,42 @@ app.use('*', (req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Relosity AI Backend Server running on port ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
+// WebSocket for real-time collaboration
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+
+    socket.on('join-project', (projectId) => {
+        socket.join(projectId);
+        console.log(`User ${socket.id} joined project ${projectId}`);
+    });
+
+    socket.on('leave-project', (projectId) => {
+        socket.leave(projectId);
+        console.log(`User ${socket.id} left project ${projectId}`);
+    });
+
+    socket.on('code-change', (data) => {
+        socket.to(data.projectId).emit('code-change', data);
+    });
+
+    socket.on('cursor-position', (data) => {
+        socket.to(data.projectId).emit('cursor-position', {
+            ...data,
+            userId: socket.id
+        });
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
 });
 
-module.exports = app;
+// Start server
+server.listen(PORT, () => {
+    console.log(`🚀 Replit AI Backend Server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 WebSocket enabled for real-time collaboration`);
+});
+
+module.exports = { app, server, io };

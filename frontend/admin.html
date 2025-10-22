@@ -4,18 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة تحكم المسؤول - Relosity AI Platform</title>
-    <meta name="description" content="لوحة تحكم المسؤول لإدارة منصة Relosity AI">
-    
-    <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#dc2626">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Relosity AI Admin">
-    <link rel="apple-touch-icon" href="/assets/icons/icon-192x192.png">
-    <link rel="manifest" href="/manifest.json">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+    <meta name="description" content="لوحة تحكم المسؤول - إدارة المستخدمين والمحادثات والمفاتيح">
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,223 +35,177 @@
     </div>
 
     <!-- Admin Login Modal -->
-    <div class="modal" id="admin-login-modal">
-        <div class="modal-content admin-login-content">
+    <div class="modal active" id="admin-login-modal">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-shield-alt"></i> تسجيل دخول المسؤول</h3>
+                <h3>تسجيل دخول المسؤول</h3>
             </div>
             <form id="admin-login-form">
                 <div class="form-group">
-                    <label>البريد الإلكتروني</label>
-                    <input type="email" id="admin-email" placeholder="admin@relosity-ai.com" required>
+                    <label for="admin-email">البريد الإلكتروني</label>
+                    <input type="email" id="admin-email" required>
                 </div>
                 <div class="form-group">
-                    <label>كلمة المرور</label>
-                    <input type="password" id="admin-password" placeholder="كلمة المرور" required>
+                    <label for="admin-password">كلمة المرور</label>
+                    <input type="password" id="admin-password" required>
                 </div>
                 <div class="form-group">
-                    <label>الرمز السري</label>
-                    <input type="password" id="admin-secret-code" placeholder="الرمز السري للمسؤول" required>
+                    <label for="admin-secret">الرمز السري</label>
+                    <input type="password" id="admin-secret" placeholder="أدخل الرمز السري للمدير" required>
                 </div>
-                <button type="submit" class="btn-primary admin-login-btn">
-                    <i class="fas fa-sign-in-alt"></i>
-                    تسجيل الدخول
-                </button>
+                <button type="submit" class="btn-primary">تسجيل الدخول</button>
             </form>
         </div>
     </div>
 
-    <!-- Navigation -->
-    <nav class="navbar admin-navbar" id="navbar">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <i class="fas fa-shield-alt"></i>
-                <span>Relosity AI Admin</span>
+    <!-- Admin Dashboard -->
+    <div class="admin-dashboard" id="admin-dashboard" style="display: none;">
+        <!-- Header -->
+        <header class="admin-header">
+            <div class="admin-header-left">
+                <div class="admin-logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>لوحة تحكم المسؤول</span>
+                </div>
             </div>
-            
-            <div class="nav-actions">
+            <div class="admin-header-right">
                 <button class="theme-toggle" id="theme-toggle">
                     <i class="fas fa-moon"></i>
                 </button>
-                <div class="admin-profile" id="admin-profile">
-                    <img id="admin-avatar" src="/assets/admin-avatar.png" alt="صورة المسؤول">
-                    <span id="admin-name">المسؤول</span>
-                    <div class="admin-dropdown" id="admin-dropdown">
-                        <a href="#profile" class="dropdown-item">
-                            <i class="fas fa-user"></i>
-                            الملف الشخصي
-                        </a>
-                        <a href="#settings" class="dropdown-item">
-                            <i class="fas fa-cog"></i>
-                            الإعدادات
-                        </a>
-                        <hr>
-                        <button class="dropdown-item logout-btn">
-                            <i class="fas fa-sign-out-alt"></i>
-                            تسجيل الخروج
+                <button class="logout-btn" id="admin-logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    تسجيل الخروج
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="admin-nav">
+            <ul class="admin-nav-list">
+                <li class="nav-item">
+                    <a href="#overview" class="nav-link active" data-section="overview">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>نظرة عامة</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#users" class="nav-link" data-section="users">
+                        <i class="fas fa-users"></i>
+                        <span>المستخدمين</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#conversations" class="nav-link" data-section="conversations">
+                        <i class="fas fa-comments"></i>
+                        <span>المحادثات</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#api-keys" class="nav-link" data-section="api-keys">
+                        <i class="fas fa-key"></i>
+                        <span>مفاتيح API</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#analytics" class="nav-link" data-section="analytics">
+                        <i class="fas fa-chart-line"></i>
+                        <span>التحليلات</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#settings" class="nav-link" data-section="settings">
+                        <i class="fas fa-cog"></i>
+                        <span>الإعدادات</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Overview Section -->
+            <section id="overview-section" class="admin-section active">
+                <div class="section-header">
+                    <h2>نظرة عامة</h2>
+                    <p>إحصائيات شاملة عن المنصة</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="total-users">0</div>
+                            <div class="stat-label">إجمالي المستخدمين</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="total-conversations">0</div>
+                            <div class="stat-label">إجمالي المحادثات</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="total-api-keys">0</div>
+                            <div class="stat-label">مفاتيح API</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="api-usage">0</div>
+                            <div class="stat-label">استخدام API اليوم</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3>نمو المستخدمين</h3>
+                        <canvas id="users-growth-chart"></canvas>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <h3>استخدام API الشهري</h3>
+                        <canvas id="api-usage-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users-section" class="admin-section">
+                <div class="section-header">
+                    <h2>إدارة المستخدمين</h2>
+                    <div class="section-actions">
+                        <button class="btn-primary" id="add-user-btn">
+                            <i class="fas fa-plus"></i>
+                            إضافة مستخدم
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
-    </nav>
 
-    <!-- Sidebar -->
-    <aside class="sidebar admin-sidebar" id="sidebar">
-        <div class="sidebar-content">
-            <div class="sidebar-menu">
-                <a href="#dashboard" class="menu-item active" data-section="dashboard">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>لوحة التحكم</span>
-                </a>
-                <a href="#users" class="menu-item" data-section="users">
-                    <i class="fas fa-users"></i>
-                    <span>المستخدمين</span>
-                </a>
-                <a href="#api-keys" class="menu-item" data-section="api-keys">
-                    <i class="fas fa-key"></i>
-                    <span>مفاتيح API</span>
-                </a>
-                <a href="#conversations" class="menu-item" data-section="conversations">
-                    <i class="fas fa-comments"></i>
-                    <span>المحادثات</span>
-                </a>
-                <a href="#analytics" class="menu-item" data-section="analytics">
-                    <i class="fas fa-chart-line"></i>
-                    <span>الإحصائيات</span>
-                </a>
-                <a href="#system" class="menu-item" data-section="system">
-                    <i class="fas fa-cogs"></i>
-                    <span>النظام</span>
-                </a>
-                <a href="#logs" class="menu-item" data-section="logs">
-                    <i class="fas fa-file-alt"></i>
-                    <span>سجلات النظام</span>
-                </a>
-                <a href="#settings" class="menu-item" data-section="settings">
-                    <i class="fas fa-cog"></i>
-                    <span>الإعدادات</span>
-                </a>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="main-content admin-main-content">
-        <!-- Dashboard Section -->
-        <section id="dashboard-section" class="content-section active">
-            <div class="section-header">
-                <h1>لوحة تحكم المسؤول</h1>
-                <div class="header-actions">
-                    <button class="btn-secondary" id="refresh-data">
-                        <i class="fas fa-sync-alt"></i>
-                        تحديث البيانات
-                    </button>
-                    <button class="btn-primary" id="export-report">
-                        <i class="fas fa-download"></i>
-                        تصدير تقرير
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Stats Cards -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-users">0</h3>
-                        <p>إجمالي المستخدمين</p>
-                        <span class="stat-change positive" id="users-change">+0%</span>
-                    </div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-comments"></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-conversations">0</h3>
-                        <p>إجمالي المحادثات</p>
-                        <span class="stat-change positive" id="conversations-change">+0%</span>
-                    </div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-key"></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="total-api-keys">0</h3>
-                        <p>مفاتيح API</p>
-                        <span class="stat-change positive" id="api-keys-change">+0%</span>
-                    </div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3 id="api-usage">0</h3>
-                        <p>استخدام API اليوم</p>
-                        <span class="stat-change positive" id="usage-change">+0%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Charts Row -->
-            <div class="charts-row">
-                <div class="chart-card">
-                    <h3>استخدام API خلال الأسبوع</h3>
-                    <canvas id="api-usage-chart"></canvas>
-                </div>
-                
-                <div class="chart-card">
-                    <h3>المستخدمين الجدد</h3>
-                    <canvas id="new-users-chart"></canvas>
-                </div>
-            </div>
-            
-            <!-- Recent Activity -->
-            <div class="recent-activity">
-                <h2>النشاط الأخير</h2>
-                <div class="activity-list" id="recent-activity-list">
-                    <!-- Activity items will be loaded here -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Users Section -->
-        <section id="users-section" class="content-section">
-            <div class="section-header">
-                <h1>إدارة المستخدمين</h1>
-                <div class="header-actions">
-                    <div class="search-box">
-                        <input type="text" id="user-search" placeholder="البحث عن مستخدم...">
-                        <i class="fas fa-search"></i>
-                    </div>
-                    <select id="user-filter">
-                        <option value="all">جميع المستخدمين</option>
-                        <option value="active">نشط</option>
-                        <option value="inactive">غير نشط</option>
-                        <option value="free">خطة مجانية</option>
-                        <option value="pro">خطة متقدمة</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="users-container">
                 <div class="users-table-container">
                     <table class="users-table" id="users-table">
                         <thead>
                             <tr>
-                                <th>المستخدم</th>
+                                <th>الاسم</th>
                                 <th>البريد الإلكتروني</th>
                                 <th>الخطة</th>
-                                <th>تاريخ الانضمام</th>
-                                <th>آخر نشاط</th>
+                                <th>تاريخ التسجيل</th>
+                                <th>آخر دخول</th>
                                 <th>الحالة</th>
                                 <th>الإجراءات</th>
                             </tr>
@@ -272,36 +215,49 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- API Keys Section -->
-        <section id="api-keys-section" class="content-section">
-            <div class="section-header">
-                <h1>إدارة مفاتيح API</h1>
-                <div class="header-actions">
-                    <div class="search-box">
-                        <input type="text" id="api-key-search" placeholder="البحث عن مفتاح...">
-                        <i class="fas fa-search"></i>
+            <!-- Conversations Section -->
+            <section id="conversations-section" class="admin-section">
+                <div class="section-header">
+                    <h2>إدارة المحادثات</h2>
+                    <div class="section-actions">
+                        <select id="conversation-filter">
+                            <option value="all">جميع المحادثات</option>
+                            <option value="today">اليوم</option>
+                            <option value="week">هذا الأسبوع</option>
+                            <option value="month">هذا الشهر</option>
+                        </select>
                     </div>
-                    <button class="btn-primary" id="generate-api-key">
-                        <i class="fas fa-plus"></i>
-                        إنشاء مفتاح جديد
-                    </button>
                 </div>
-            </div>
-            
-            <div class="api-keys-container">
+
+                <div class="conversations-list" id="conversations-list">
+                    <!-- Conversations will be loaded here -->
+                </div>
+            </section>
+
+            <!-- API Keys Section -->
+            <section id="api-keys-section" class="admin-section">
+                <div class="section-header">
+                    <h2>إدارة مفاتيح API</h2>
+                    <div class="section-actions">
+                        <button class="btn-primary" id="generate-api-key-btn">
+                            <i class="fas fa-plus"></i>
+                            توليد مفتاح جديد
+                        </button>
+                    </div>
+                </div>
+
                 <div class="api-keys-table-container">
                     <table class="api-keys-table" id="api-keys-table">
                         <thead>
                             <tr>
-                                <th>اسم المفتاح</th>
                                 <th>المالك</th>
+                                <th>اسم المفتاح</th>
+                                <th>المفتاح</th>
                                 <th>الاستخدام</th>
                                 <th>الحد الأقصى</th>
                                 <th>تاريخ الإنشاء</th>
-                                <th>آخر استخدام</th>
                                 <th>الحالة</th>
                                 <th>الإجراءات</th>
                             </tr>
@@ -311,310 +267,130 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Conversations Section -->
-        <section id="conversations-section" class="content-section">
-            <div class="section-header">
-                <h1>إدارة المحادثات</h1>
-                <div class="header-actions">
-                    <div class="search-box">
-                        <input type="text" id="conversation-search" placeholder="البحث في المحادثات...">
-                        <i class="fas fa-search"></i>
-                    </div>
-                    <select id="conversation-filter">
-                        <option value="all">جميع المحادثات</option>
-                        <option value="today">اليوم</option>
-                        <option value="week">هذا الأسبوع</option>
-                        <option value="month">هذا الشهر</option>
-                    </select>
+            <!-- Analytics Section -->
+            <section id="analytics-section" class="admin-section">
+                <div class="section-header">
+                    <h2>التحليلات والإحصائيات</h2>
                 </div>
-            </div>
-            
-            <div class="conversations-container">
-                <div class="conversations-list" id="conversations-list">
-                    <!-- Conversations will be loaded here -->
-                </div>
-            </div>
-        </section>
 
-        <!-- Analytics Section -->
-        <section id="analytics-section" class="content-section">
-            <div class="section-header">
-                <h1>التحليلات والإحصائيات</h1>
-                <div class="header-actions">
-                    <select id="analytics-period">
-                        <option value="7">آخر 7 أيام</option>
-                        <option value="30" selected>آخر 30 يوم</option>
-                        <option value="90">آخر 90 يوم</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="analytics-grid">
-                <div class="analytics-card">
-                    <h3>استخدام API الشهري</h3>
-                    <canvas id="monthly-api-usage-chart"></canvas>
-                </div>
-                
-                <div class="analytics-card">
-                    <h3>المحادثات اليومية</h3>
-                    <canvas id="daily-conversations-chart"></canvas>
-                </div>
-                
-                <div class="analytics-card">
-                    <h3>توزيع المستخدمين حسب الخطة</h3>
-                    <canvas id="users-by-plan-chart"></canvas>
-                </div>
-                
-                <div class="analytics-card">
-                    <h3>أكثر المواضيع شيوعاً</h3>
-                    <div class="topics-list" id="topics-list">
-                        <!-- Topics will be loaded here -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- System Section -->
-        <section id="system-section" class="content-section">
-            <div class="section-header">
-                <h1>مراقبة النظام</h1>
-                <div class="header-actions">
-                    <button class="btn-secondary" id="refresh-system">
-                        <i class="fas fa-sync-alt"></i>
-                        تحديث
-                    </button>
-                </div>
-            </div>
-            
-            <div class="system-grid">
-                <div class="system-card">
-                    <h3>حالة الخدمات</h3>
-                    <div class="service-status" id="service-status">
-                        <!-- Service status will be loaded here -->
-                    </div>
-                </div>
-                
-                <div class="system-card">
-                    <h3>استخدام الذاكرة</h3>
-                    <div class="memory-usage" id="memory-usage">
-                        <div class="usage-bar">
-                            <div class="usage-progress" id="memory-progress"></div>
-                        </div>
-                        <span class="usage-text" id="memory-text">0%</span>
-                    </div>
-                </div>
-                
-                <div class="system-card">
-                    <h3>استخدام التخزين</h3>
-                    <div class="storage-usage" id="storage-usage">
-                        <div class="usage-bar">
-                            <div class="usage-progress" id="storage-progress"></div>
-                        </div>
-                        <span class="usage-text" id="storage-text">0%</span>
-                    </div>
-                </div>
-                
-                <div class="system-card">
-                    <h3>الأخطاء الأخيرة</h3>
-                    <div class="recent-errors" id="recent-errors">
-                        <!-- Recent errors will be loaded here -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Logs Section -->
-        <section id="logs-section" class="content-section">
-            <div class="section-header">
-                <h1>سجلات النظام</h1>
-                <div class="header-actions">
-                    <select id="log-level">
-                        <option value="all">جميع المستويات</option>
-                        <option value="error">أخطاء فقط</option>
-                        <option value="warning">تحذيرات</option>
-                        <option value="info">معلومات</option>
-                    </select>
-                    <button class="btn-secondary" id="clear-logs">
-                        <i class="fas fa-trash"></i>
-                        مسح السجلات
-                    </button>
-                </div>
-            </div>
-            
-            <div class="logs-container">
-                <div class="logs-list" id="logs-list">
-                    <!-- Logs will be loaded here -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Settings Section -->
-        <section id="settings-section" class="content-section">
-            <div class="section-header">
-                <h1>إعدادات النظام</h1>
-            </div>
-            
-            <div class="settings-container">
-                <div class="settings-tabs">
-                    <button class="tab-btn active" data-tab="general">عام</button>
-                    <button class="tab-btn" data-tab="api">API</button>
-                    <button class="tab-btn" data-tab="security">الأمان</button>
-                    <button class="tab-btn" data-tab="notifications">الإشعارات</button>
-                </div>
-                
-                <div class="settings-content">
-                    <!-- General Tab -->
-                    <div class="tab-content active" id="general-tab">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>اسم النظام</h4>
-                                <p>اسم منصة Relosity AI</p>
-                            </div>
-                            <input type="text" id="system-name" value="Relosity AI Platform">
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>وصف النظام</h4>
-                                <p>وصف مختصر للمنصة</p>
-                            </div>
-                            <textarea id="system-description" rows="3">منصة الذكاء الاصطناعي المتطورة والمتكاملة</textarea>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>حالة النظام</h4>
-                                <p>تفعيل أو تعطيل النظام</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="system-status" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
+                <div class="analytics-grid">
+                    <div class="chart-container">
+                        <h3>استخدام النظام حسب الساعة</h3>
+                        <canvas id="hourly-usage-chart"></canvas>
                     </div>
                     
-                    <!-- API Tab -->
-                    <div class="tab-content" id="api-tab">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>حد الاستخدام الافتراضي</h4>
-                                <p>عدد الطلبات المسموح بها يومياً للمستخدمين الجدد</p>
-                            </div>
-                            <input type="number" id="default-api-limit" value="100">
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>تفعيل توليد الصور</h4>
-                                <p>السماح للمستخدمين بتوليد الصور</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-image-generation" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>تفعيل المراجعة التلقائية</h4>
-                                <p>مراجعة المحتوى تلقائياً قبل الإرسال</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-moderation" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
+                    <div class="chart-container">
+                        <h3>توزيع المستخدمين حسب الخطة</h3>
+                        <canvas id="plan-distribution-chart"></canvas>
                     </div>
                     
-                    <!-- Security Tab -->
-                    <div class="tab-content" id="security-tab">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>تشفير البيانات</h4>
-                                <p>تشفير جميع البيانات الحساسة</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-encryption" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>مدة انتهاء الجلسة</h4>
-                                <p>المدة بالدقائق قبل انتهاء جلسة المستخدم</p>
-                            </div>
-                            <input type="number" id="session-timeout" value="60">
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>تفعيل تسجيل الأنشطة</h4>
-                                <p>تسجيل جميع أنشطة المستخدمين</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-activity-logging" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
+                    <div class="chart-container">
+                        <h3>نمو المحادثات</h3>
+                        <canvas id="conversations-growth-chart"></canvas>
                     </div>
                     
-                    <!-- Notifications Tab -->
-                    <div class="tab-content" id="notifications-tab">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>إشعارات البريد الإلكتروني</h4>
-                                <p>إرسال إشعارات عبر البريد الإلكتروني</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-email-notifications" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>إشعارات النظام</h4>
-                                <p>إشعارات داخل النظام</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="enable-system-notifications" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>عنوان البريد الإلكتروني</h4>
-                                <p>عنوان البريد الإلكتروني لإرسال الإشعارات</p>
-                            </div>
-                            <input type="email" id="notification-email" value="admin@relosity-ai.com">
-                        </div>
+                    <div class="chart-container">
+                        <h3>أكثر الأسئلة شيوعاً</h3>
+                        <canvas id="popular-questions-chart"></canvas>
                     </div>
                 </div>
-                
-                <div class="settings-actions">
-                    <button class="btn-secondary" id="reset-settings">إعادة تعيين</button>
-                    <button class="btn-primary" id="save-settings">حفظ الإعدادات</button>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings-section" class="admin-section">
+                <div class="section-header">
+                    <h2>إعدادات النظام</h2>
                 </div>
-            </div>
-        </section>
-    </main>
+
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>إعدادات API</h3>
+                        <form id="api-settings-form">
+                            <div class="form-group">
+                                <label for="openai-api-key">مفتاح OpenAI API</label>
+                                <input type="password" id="openai-api-key" placeholder="أدخل مفتاح OpenAI API">
+                            </div>
+                            <div class="form-group">
+                                <label for="api-rate-limit">حد معدل API</label>
+                                <input type="number" id="api-rate-limit" placeholder="100" value="100">
+                            </div>
+                            <button type="submit" class="btn-primary">حفظ الإعدادات</button>
+                        </form>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>إعدادات النظام</h3>
+                        <form id="system-settings-form">
+                            <div class="form-group">
+                                <label for="max-file-size">الحد الأقصى لحجم الملف (MB)</label>
+                                <input type="number" id="max-file-size" placeholder="10" value="10">
+                            </div>
+                            <div class="form-group">
+                                <label for="maintenance-mode">وضع الصيانة</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="maintenance-mode">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn-primary">حفظ الإعدادات</button>
+                        </form>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>إعدادات الأمان</h3>
+                        <form id="security-settings-form">
+                            <div class="form-group">
+                                <label for="session-timeout">انتهاء صلاحية الجلسة (دقيقة)</label>
+                                <input type="number" id="session-timeout" placeholder="30" value="30">
+                            </div>
+                            <div class="form-group">
+                                <label for="max-login-attempts">الحد الأقصى لمحاولات تسجيل الدخول</label>
+                                <input type="number" id="max-login-attempts" placeholder="5" value="5">
+                            </div>
+                            <button type="submit" class="btn-primary">حفظ الإعدادات</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <!-- Modals -->
-    <!-- User Details Modal -->
-    <div class="modal" id="user-details-modal">
+    <!-- Add User Modal -->
+    <div class="modal" id="add-user-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>تفاصيل المستخدم</h3>
+                <h3>إضافة مستخدم جديد</h3>
                 <button class="modal-close">&times;</button>
             </div>
-            <div class="user-details" id="user-details-content">
-                <!-- User details will be loaded here -->
-            </div>
+            <form id="add-user-form">
+                <div class="form-group">
+                    <label for="new-user-name">الاسم الكامل</label>
+                    <input type="text" id="new-user-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-user-email">البريد الإلكتروني</label>
+                    <input type="email" id="new-user-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-user-password">كلمة المرور</label>
+                    <input type="password" id="new-user-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-user-plan">الخطة</label>
+                    <select id="new-user-plan">
+                        <option value="free">مجانية</option>
+                        <option value="pro">متقدمة</option>
+                        <option value="enterprise">مؤسسية</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="cancel-add-user">إلغاء</button>
+                    <button type="submit" class="btn-primary">إضافة المستخدم</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -622,22 +398,22 @@
     <div class="modal" id="generate-api-key-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>إنشاء مفتاح API جديد</h3>
+                <h3>توليد مفتاح API جديد</h3>
                 <button class="modal-close">&times;</button>
             </div>
             <form id="generate-api-key-form">
                 <div class="form-group">
-                    <label>اسم المفتاح</label>
-                    <input type="text" id="new-api-key-name" placeholder="اسم المفتاح" required>
-                </div>
-                <div class="form-group">
-                    <label>المستخدم</label>
-                    <select id="api-key-user" required>
+                    <label for="api-key-owner">المالك</label>
+                    <select id="api-key-owner" required>
                         <!-- Users will be loaded here -->
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>حد الاستخدام</label>
+                    <label for="api-key-name">اسم المفتاح</label>
+                    <input type="text" id="api-key-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="api-key-limit">حد الاستخدام</label>
                     <select id="api-key-limit">
                         <option value="100">100 طلب</option>
                         <option value="500">500 طلب</option>
@@ -647,8 +423,8 @@
                     </select>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="hideModal('generate-api-key-modal')">إلغاء</button>
-                    <button type="submit" class="btn-primary">إنشاء المفتاح</button>
+                    <button type="button" class="btn-secondary" id="cancel-generate-api">إلغاء</button>
+                    <button type="submit" class="btn-primary">توليد المفتاح</button>
                 </div>
             </form>
         </div>

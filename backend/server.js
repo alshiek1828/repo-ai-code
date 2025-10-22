@@ -3,19 +3,16 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const admin = require('firebase-admin');
-const { OpenAI } = require('openai');
+const OpenAI = require('openai');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
+const path = require('path');
+require('dotenv').config();
 
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Firebase Admin Configuration
+// Initialize Firebase Admin
 const serviceAccount = {
     type: "service_account",
     project_id: "gmae-fae90",
@@ -26,10 +23,9 @@ const serviceAccount = {
     auth_uri: "https://accounts.google.com/o/oauth2/auth",
     token_uri: "https://oauth2.googleapis.com/token",
     auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`
+    client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL
 };
 
-// Initialize Firebase Admin
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     databaseURL: "https://gmae-fae90-default-rtdb.firebaseio.com",
@@ -39,52 +35,27 @@ admin.initializeApp({
 const db = admin.database();
 const storage = admin.storage();
 
-// OpenAI Configuration
+// Initialize OpenAI
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'your-openai-api-key-here'
 });
 
 // Middleware
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
-            scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://api.openai.com", "https://gmae-fae90-default-rtdb.firebaseio.com"]
-        }
-    }
-}));
-
+app.use(helmet());
 app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true
 }));
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate Limiting
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per windowMs
-    message: {
-        error: 'Too many requests from this IP, please try again later.'
-    }
+    message: 'Too many requests from this IP, please try again later.'
 });
-
-const aiLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 10, // limit each IP to 10 AI requests per minute
-    message: {
-        error: 'Too many AI requests, please wait a moment.'
-    }
-});
-
 app.use('/api/', limiter);
-app.use('/api/ai/', aiLimiter);
 
 // Multer configuration for file uploads
 const upload = multer({
@@ -93,73 +64,95 @@ const upload = multer({
         fileSize: 10 * 1024 * 1024 // 10MB limit
     },
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('text/')) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'text/plain', 'application/pdf'];
+        if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Only images and text files are allowed'), false);
+            cb(new Error('Invalid file type'), false);
         }
     }
 });
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+// Authentication middleware
+const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-// Email Configuration
-const transporter = nodemailer.createTransporter({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
     }
-});
 
-// Middleware to verify Firebase token
-const verifyFirebaseToken = async (req, res, next) => {
     try {
-        const token = req.headers.authorization?.split('Bearer ')[1];
-        if (!token) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
         const decodedToken = await admin.auth().verifyIdToken(token);
         req.user = decodedToken;
         next();
     } catch (error) {
         console.error('Token verification error:', error);
-        res.status(401).json({ error: 'Invalid token' });
+        return res.status(403).json({ error: 'Invalid or expired token' });
     }
 };
 
-// Middleware to verify API key
-const verifyApiKey = async (req, res, next) => {
+// Admin authentication middleware
+const authenticateAdmin = async (req, res, next) => {
     try {
-        const apiKey = req.headers['x-api-key'];
-        if (!apiKey) {
-            return res.status(401).json({ error: 'API key required' });
+        const userRef = db.ref(`users/${req.user.uid}`);
+        const snapshot = await userRef.once('value');
+        const userData = snapshot.val();
+
+        if (!userData || userData.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
         }
 
-        // Check if API key exists in database
-        const apiKeyRef = db.ref('apiKeys');
-        const snapshot = await apiKeyRef.orderByChild('key').equalTo(apiKey).once('value');
-        const apiKeyData = snapshot.val();
+        next();
+    } catch (error) {
+        console.error('Admin verification error:', error);
+        return res.status(500).json({ error: 'Server error' });
+    }
+};
 
-        if (!apiKeyData) {
-            return res.status(401).json({ error: 'Invalid API key' });
+// API Key validation middleware
+const validateApiKey = async (req, res, next) => {
+    const apiKey = req.headers['x-api-key'];
+
+    if (!apiKey) {
+        return res.status(401).json({ error: 'API key required' });
+    }
+
+    try {
+        // Find the API key in database
+        const apiKeysRef = db.ref('apiKeys');
+        const snapshot = await apiKeysRef.once('value');
+        const allApiKeys = snapshot.val();
+
+        let keyOwner = null;
+        let keyData = null;
+
+        for (const userId in allApiKeys) {
+            for (const key in allApiKeys[userId]) {
+                if (allApiKeys[userId][key].key === apiKey) {
+                    keyOwner = userId;
+                    keyData = allApiKeys[userId][key];
+                    break;
+                }
+            }
+            if (keyOwner) break;
         }
 
-        const keyId = Object.keys(apiKeyData)[0];
-        const keyInfo = apiKeyData[keyId];
+        if (!keyOwner || !keyData.isActive) {
+            return res.status(403).json({ error: 'Invalid or inactive API key' });
+        }
 
         // Check usage limits
-        if (keyInfo.limit !== 'unlimited' && keyInfo.usage >= keyInfo.limit) {
+        if (keyData.limit !== 'unlimited' && keyData.usage >= keyData.limit) {
             return res.status(429).json({ error: 'API key usage limit exceeded' });
         }
 
-        req.apiKey = { id: keyId, ...keyInfo };
+        req.apiKeyOwner = keyOwner;
+        req.apiKeyData = keyData;
         next();
     } catch (error) {
-        console.error('API key verification error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('API key validation error:', error);
+        return res.status(500).json({ error: 'Server error' });
     }
 };
 
@@ -175,152 +168,212 @@ app.get('/api/health', (req, res) => {
 });
 
 // AI Chat endpoint
-app.post('/api/ai/chat', verifyApiKey, async (req, res) => {
+app.post('/api/chat', authenticateToken, async (req, res) => {
     try {
-        const { message, conversationId } = req.body;
-        
-        if (!message || typeof message !== 'string') {
+        const { message, chatId } = req.body;
+
+        if (!message || !message.trim()) {
             return res.status(400).json({ error: 'Message is required' });
         }
 
-        // Generate AI response using OpenAI
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are Relosity AI, a helpful Arabic AI assistant. Respond in Arabic and be helpful, accurate, and friendly. Keep responses concise but informative."
-                },
-                {
-                    role: "user",
-                    content: message
-                }
-            ],
-            max_tokens: 1000,
-            temperature: 0.7
-        });
+        // Get AI response
+        const aiResponse = await getAIResponse(message, req.user.uid);
 
-        const aiResponse = completion.choices[0].message.content;
-
-        // Update API key usage
-        const apiKeyRef = db.ref(`apiKeys/${req.apiKey.id}`);
-        await apiKeyRef.update({
-            usage: (req.apiKey.usage || 0) + 1,
-            lastUsed: new Date().toISOString()
-        });
-
-        // Save conversation if conversationId provided
-        if (conversationId) {
-            const conversationRef = db.ref(`conversations/${conversationId}`);
-            await conversationRef.push({
-                userMessage: message,
-                aiResponse: aiResponse,
+        // Save conversation to database
+        if (chatId) {
+            const chatRef = db.ref(`users/${req.user.uid}/chats/${chatId}/messages`);
+            await chatRef.push({
+                content: message,
+                sender: 'user',
                 timestamp: new Date().toISOString()
+            });
+
+            await chatRef.push({
+                content: aiResponse,
+                sender: 'ai',
+                timestamp: new Date().toISOString()
+            });
+
+            // Update chat last message
+            await db.ref(`users/${req.user.uid}/chats/${chatId}`).update({
+                lastMessage: aiResponse,
+                lastMessageTime: new Date().toISOString()
             });
         }
 
+        // Update user usage stats
+        await updateUserUsage(req.user.uid, 'conversations');
+
         res.json({
+            success: true,
             response: aiResponse,
-            conversationId: conversationId || uuidv4(),
-            usage: req.apiKey.usage + 1,
-            limit: req.apiKey.limit
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
-        console.error('AI chat error:', error);
-        res.status(500).json({ error: 'Failed to generate AI response' });
+        console.error('Chat error:', error);
+        res.status(500).json({ error: 'Failed to process chat request' });
     }
 });
 
-// Generate API Key
-app.post('/api/keys/generate', verifyFirebaseToken, async (req, res) => {
+// AI Chat endpoint for API keys
+app.post('/api/v1/chat', validateApiKey, async (req, res) => {
     try {
-        const { name, limit = 1000 } = req.body;
-        const userId = req.user.uid;
+        const { message, model = 'gpt-3.5-turbo' } = req.body;
 
-        if (!name) {
-            return res.status(400).json({ error: 'API key name is required' });
+        if (!message || !message.trim()) {
+            return res.status(400).json({ error: 'Message is required' });
         }
 
-        // Generate API key
-        const apiKey = `rel_${crypto.randomBytes(32).toString('hex')}`;
-        const keyId = uuidv4();
+        // Get AI response
+        const aiResponse = await getAIResponse(message, req.apiKeyOwner, model);
 
-        // Save to database
-        const apiKeyRef = db.ref(`apiKeys/${keyId}`);
-        await apiKeyRef.set({
-            key: apiKey,
-            name: name,
-            userId: userId,
-            limit: limit,
-            usage: 0,
-            createdAt: new Date().toISOString(),
-            isActive: true
-        });
-
-        // Also save to user's API keys
-        const userApiKeyRef = db.ref(`users/${userId}/apiKeys/${keyId}`);
-        await userApiKeyRef.set({
-            key: apiKey,
-            name: name,
-            limit: limit,
-            usage: 0,
-            createdAt: new Date().toISOString()
-        });
+        // Update API key usage
+        await updateApiKeyUsage(req.apiKeyOwner, req.apiKeyData.key);
 
         res.json({
-            apiKey: apiKey,
-            keyId: keyId,
-            name: name,
-            limit: limit
+            success: true,
+            response: aiResponse,
+            model: model,
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
-        console.error('API key generation error:', error);
-        res.status(500).json({ error: 'Failed to generate API key' });
+        console.error('API Chat error:', error);
+        res.status(500).json({ error: 'Failed to process chat request' });
     }
 });
 
-// Get user's API keys
-app.get('/api/keys', verifyFirebaseToken, async (req, res) => {
+// Get user conversations
+app.get('/api/conversations', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.uid;
-        const userApiKeysRef = db.ref(`users/${userId}/apiKeys`);
-        const snapshot = await userApiKeysRef.once('value');
+        const conversationsRef = db.ref(`users/${req.user.uid}/chats`);
+        const snapshot = await conversationsRef.once('value');
+        const conversations = snapshot.val() || {};
+
+        res.json({
+            success: true,
+            conversations: Object.values(conversations)
+        });
+
+    } catch (error) {
+        console.error('Get conversations error:', error);
+        res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+});
+
+// Get specific conversation
+app.get('/api/conversations/:chatId', authenticateToken, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const chatRef = db.ref(`users/${req.user.uid}/chats/${chatId}`);
+        const snapshot = await chatRef.once('value');
+        const chat = snapshot.val();
+
+        if (!chat) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        res.json({
+            success: true,
+            conversation: chat
+        });
+
+    } catch (error) {
+        console.error('Get conversation error:', error);
+        res.status(500).json({ error: 'Failed to fetch conversation' });
+    }
+});
+
+// Create new conversation
+app.post('/api/conversations', authenticateToken, async (req, res) => {
+    try {
+        const { title = 'محادثة جديدة' } = req.body;
+        const chatId = Date.now().toString();
+
+        const chatData = {
+            id: chatId,
+            title: title,
+            createdAt: new Date().toISOString(),
+            lastMessage: '',
+            lastMessageTime: new Date().toISOString(),
+            messages: []
+        };
+
+        await db.ref(`users/${req.user.uid}/chats/${chatId}`).set(chatData);
+
+        res.json({
+            success: true,
+            conversation: chatData
+        });
+
+    } catch (error) {
+        console.error('Create conversation error:', error);
+        res.status(500).json({ error: 'Failed to create conversation' });
+    }
+});
+
+// Get user API keys
+app.get('/api/api-keys', authenticateToken, async (req, res) => {
+    try {
+        const apiKeysRef = db.ref(`apiKeys/${req.user.uid}`);
+        const snapshot = await apiKeysRef.once('value');
         const apiKeys = snapshot.val() || {};
 
-        const keysList = Object.entries(apiKeys).map(([id, key]) => ({
-            id,
-            ...key
-        }));
-
-        res.json({ apiKeys: keysList });
+        res.json({
+            success: true,
+            apiKeys: Object.values(apiKeys)
+        });
 
     } catch (error) {
         console.error('Get API keys error:', error);
-        res.status(500).json({ error: 'Failed to retrieve API keys' });
+        res.status(500).json({ error: 'Failed to fetch API keys' });
+    }
+});
+
+// Create new API key
+app.post('/api/api-keys', authenticateToken, async (req, res) => {
+    try {
+        const { name, limit = 100 } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'API key name is required' });
+        }
+
+        const apiKey = generateApiKey();
+        const keyData = {
+            key: apiKey,
+            name: name,
+            createdAt: new Date().toISOString(),
+            isActive: true,
+            usage: 0,
+            limit: limit
+        };
+
+        await db.ref(`apiKeys/${req.user.uid}/${apiKey}`).set(keyData);
+
+        res.json({
+            success: true,
+            apiKey: keyData
+        });
+
+    } catch (error) {
+        console.error('Create API key error:', error);
+        res.status(500).json({ error: 'Failed to create API key' });
     }
 });
 
 // Delete API key
-app.delete('/api/keys/:keyId', verifyFirebaseToken, async (req, res) => {
+app.delete('/api/api-keys/:keyId', authenticateToken, async (req, res) => {
     try {
         const { keyId } = req.params;
-        const userId = req.user.uid;
 
-        // Check if key belongs to user
-        const userApiKeyRef = db.ref(`users/${userId}/apiKeys/${keyId}`);
-        const snapshot = await userApiKeyRef.once('value');
-        
-        if (!snapshot.exists()) {
-            return res.status(404).json({ error: 'API key not found' });
-        }
+        await db.ref(`apiKeys/${req.user.uid}/${keyId}`).remove();
 
-        // Delete from both locations
-        await userApiKeyRef.remove();
-        await db.ref(`apiKeys/${keyId}`).remove();
-
-        res.json({ message: 'API key deleted successfully' });
+        res.json({
+            success: true,
+            message: 'API key deleted successfully'
+        });
 
     } catch (error) {
         console.error('Delete API key error:', error);
@@ -328,104 +381,61 @@ app.delete('/api/keys/:keyId', verifyFirebaseToken, async (req, res) => {
     }
 });
 
-// Get conversations
-app.get('/api/conversations', verifyFirebaseToken, async (req, res) => {
+// Get user analytics
+app.get('/api/analytics', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.uid;
-        const conversationsRef = db.ref(`users/${userId}/conversations`);
-        const snapshot = await conversationsRef.once('value');
-        const conversations = snapshot.val() || {};
+        const userRef = db.ref(`users/${req.user.uid}`);
+        const snapshot = await userRef.once('value');
+        const userData = snapshot.val();
 
-        const conversationsList = Object.entries(conversations).map(([id, conv]) => ({
-            id,
-            ...conv
-        }));
-
-        res.json({ conversations: conversationsList });
-
-    } catch (error) {
-        console.error('Get conversations error:', error);
-        res.status(500).json({ error: 'Failed to retrieve conversations' });
-    }
-});
-
-// Save conversation
-app.post('/api/conversations', verifyFirebaseToken, async (req, res) => {
-    try {
-        const { userMessage, aiResponse, topic } = req.body;
-        const userId = req.user.uid;
-
-        if (!userMessage || !aiResponse) {
-            return res.status(400).json({ error: 'User message and AI response are required' });
-        }
-
-        const conversationRef = db.ref(`users/${userId}/conversations`);
-        const newConversation = await conversationRef.push({
-            userMessage,
-            aiResponse,
-            topic: topic || 'عام',
-            timestamp: new Date().toISOString()
-        });
+        const analytics = {
+            totalConversations: userData?.usage?.conversations || 0,
+            totalApiCalls: userData?.usage?.apiCalls || 0,
+            plan: userData?.plan || 'free',
+            createdAt: userData?.createdAt,
+            lastLogin: userData?.lastLogin
+        };
 
         res.json({
-            conversationId: newConversation.key,
-            message: 'Conversation saved successfully'
+            success: true,
+            analytics: analytics
         });
 
     } catch (error) {
-        console.error('Save conversation error:', error);
-        res.status(500).json({ error: 'Failed to save conversation' });
+        console.error('Get analytics error:', error);
+        res.status(500).json({ error: 'Failed to fetch analytics' });
     }
 });
 
-// Delete conversation
-app.delete('/api/conversations/:conversationId', verifyFirebaseToken, async (req, res) => {
-    try {
-        const { conversationId } = req.params;
-        const userId = req.user.uid;
-
-        const conversationRef = db.ref(`users/${userId}/conversations/${conversationId}`);
-        await conversationRef.remove();
-
-        res.json({ message: 'Conversation deleted successfully' });
-
-    } catch (error) {
-        console.error('Delete conversation error:', error);
-        res.status(500).json({ error: 'Failed to delete conversation' });
-    }
-});
-
-// Upload file
-app.post('/api/upload', verifyFirebaseToken, upload.single('file'), async (req, res) => {
+// File upload endpoint
+app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        const userId = req.user.uid;
-        const fileName = `${userId}/${Date.now()}_${req.file.originalname}`;
-        const bucket = storage.bucket();
-        const file = bucket.file(fileName);
+        const fileName = `${Date.now()}-${req.file.originalname}`;
+        const fileRef = storage.bucket().file(`uploads/${req.user.uid}/${fileName}`);
 
-        await file.save(req.file.buffer, {
+        await fileRef.save(req.file.buffer, {
             metadata: {
                 contentType: req.file.mimetype,
                 metadata: {
-                    uploadedBy: userId,
+                    uploadedBy: req.user.uid,
                     originalName: req.file.originalname
                 }
             }
         });
 
-        // Make file publicly accessible
-        await file.makePublic();
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        const downloadURL = await fileRef.getSignedUrl({
+            action: 'read',
+            expires: '03-01-2500'
+        });
 
         res.json({
-            url: publicUrl,
-            fileName: req.file.originalname,
-            size: req.file.size,
-            type: req.file.mimetype
+            success: true,
+            fileUrl: downloadURL[0],
+            fileName: fileName
         });
 
     } catch (error) {
@@ -434,163 +444,171 @@ app.post('/api/upload', verifyFirebaseToken, upload.single('file'), async (req, 
     }
 });
 
-// Contact form
-app.post('/api/contact', async (req, res) => {
-    try {
-        const { name, email, subject, message } = req.body;
-
-        if (!name || !email || !subject || !message) {
-            return res.status(400).json({ error: 'All fields are required' });
-        }
-
-        // Save to database
-        const contactRef = db.ref('contacts');
-        await contactRef.push({
-            name,
-            email,
-            subject,
-            message,
-            timestamp: new Date().toISOString(),
-            status: 'new'
-        });
-
-        // Send email notification
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: process.env.ADMIN_EMAIL || 'admin@relosity-ai.com',
-            subject: `New Contact Form Submission: ${subject}`,
-            html: `
-                <h2>New Contact Form Submission</h2>
-                <p><strong>Name:</strong> ${name}</p>
-                <p><strong>Email:</strong> ${email}</p>
-                <p><strong>Subject:</strong> ${subject}</p>
-                <p><strong>Message:</strong></p>
-                <p>${message}</p>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
-
-        res.json({ message: 'Contact form submitted successfully' });
-
-    } catch (error) {
-        console.error('Contact form error:', error);
-        res.status(500).json({ error: 'Failed to submit contact form' });
-    }
-});
-
 // Admin routes
-app.get('/api/admin/stats', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/users', authenticateToken, authenticateAdmin, async (req, res) => {
     try {
-        // Check if user is admin
-        const userRef = db.ref(`users/${req.user.uid}`);
-        const userSnapshot = await userRef.once('value');
-        const userData = userSnapshot.val();
-
-        if (!userData || userData.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
-        // Get statistics
-        const [usersSnapshot, conversationsSnapshot, apiKeysSnapshot, contactsSnapshot] = await Promise.all([
-            db.ref('users').once('value'),
-            db.ref('conversations').once('value'),
-            db.ref('apiKeys').once('value'),
-            db.ref('contacts').once('value')
-        ]);
-
-        const stats = {
-            totalUsers: Object.keys(usersSnapshot.val() || {}).length,
-            totalConversations: Object.keys(conversationsSnapshot.val() || {}).length,
-            totalApiKeys: Object.keys(apiKeysSnapshot.val() || {}).length,
-            totalContacts: Object.keys(contactsSnapshot.val() || {}).length,
-            activeApiKeys: Object.values(apiKeysSnapshot.val() || {}).filter(key => key.isActive).length
-        };
-
-        res.json(stats);
-
-    } catch (error) {
-        console.error('Admin stats error:', error);
-        res.status(500).json({ error: 'Failed to retrieve admin statistics' });
-    }
-});
-
-// Get all users (admin only)
-app.get('/api/admin/users', verifyFirebaseToken, async (req, res) => {
-    try {
-        // Check if user is admin
-        const userRef = db.ref(`users/${req.user.uid}`);
-        const userSnapshot = await userRef.once('value');
-        const userData = userSnapshot.val();
-
-        if (!userData || userData.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
         const usersRef = db.ref('users');
         const snapshot = await usersRef.once('value');
         const users = snapshot.val() || {};
 
-        const usersList = Object.entries(users).map(([id, user]) => ({
-            id,
-            ...user
-        }));
-
-        res.json({ users: usersList });
+        res.json({
+            success: true,
+            users: Object.values(users)
+        });
 
     } catch (error) {
         console.error('Get users error:', error);
-        res.status(500).json({ error: 'Failed to retrieve users' });
+        res.status(500).json({ error: 'Failed to fetch users' });
     }
 });
 
-// Update user role (admin only)
-app.put('/api/admin/users/:userId/role', verifyFirebaseToken, async (req, res) => {
+app.get('/api/admin/stats', authenticateToken, authenticateAdmin, async (req, res) => {
     try {
-        // Check if user is admin
-        const userRef = db.ref(`users/${req.user.uid}`);
-        const userSnapshot = await userRef.once('value');
-        const userData = userSnapshot.val();
+        const usersRef = db.ref('users');
+        const apiKeysRef = db.ref('apiKeys');
+        const conversationsRef = db.ref('conversations');
 
-        if (!userData || userData.role !== 'admin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
+        const [usersSnapshot, apiKeysSnapshot, conversationsSnapshot] = await Promise.all([
+            usersRef.once('value'),
+            apiKeysRef.once('value'),
+            conversationsRef.once('value')
+        ]);
 
-        const { userId } = req.params;
-        const { role } = req.body;
+        const users = usersSnapshot.val() || {};
+        const apiKeys = apiKeysSnapshot.val() || {};
+        const conversations = conversationsSnapshot.val() || {};
 
-        if (!['user', 'admin'].includes(role)) {
-            return res.status(400).json({ error: 'Invalid role' });
-        }
+        const stats = {
+            totalUsers: Object.keys(users).length,
+            totalApiKeys: Object.keys(apiKeys).length,
+            totalConversations: Object.keys(conversations).length,
+            activeUsers: Object.values(users).filter(user => user.isActive).length
+        };
 
-        const targetUserRef = db.ref(`users/${userId}`);
-        await targetUserRef.update({ role });
-
-        res.json({ message: 'User role updated successfully' });
+        res.json({
+            success: true,
+            stats: stats
+        });
 
     } catch (error) {
-        console.error('Update user role error:', error);
-        res.status(500).json({ error: 'Failed to update user role' });
+        console.error('Get admin stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch admin stats' });
     }
 });
+
+// Helper functions
+async function getAIResponse(message, userId, model = 'gpt-3.5-turbo') {
+    try {
+        // Get user's conversation history for context
+        const userRef = db.ref(`users/${userId}/chats`);
+        const snapshot = await userRef.limitToLast(1).once('value');
+        const recentChats = snapshot.val() || {};
+
+        // Build context from recent messages
+        let context = '';
+        for (const chatId in recentChats) {
+            const messages = recentChats[chatId].messages || {};
+            const recentMessages = Object.values(messages).slice(-5); // Last 5 messages
+            context += recentMessages.map(msg => 
+                `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+            ).join('\n');
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: model,
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are Relosity AI, an advanced Arabic AI assistant. You help users with various tasks including answering questions, providing information, creative writing, problem-solving, and more. Always respond in Arabic unless specifically asked to use another language. Be helpful, accurate, and engaging.${context ? '\n\nPrevious conversation context:\n' + context : ''}`
+                },
+                {
+                    role: 'user',
+                    content: message
+                }
+            ],
+            max_tokens: 1000,
+            temperature: 0.7
+        });
+
+        return completion.choices[0].message.content;
+
+    } catch (error) {
+        console.error('OpenAI API error:', error);
+        
+        // Fallback responses in Arabic
+        const fallbackResponses = [
+            'عذراً، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.',
+            'أعتذر، لا يمكنني معالجة طلبك في الوقت الحالي. حاول مرة أخرى لاحقاً.',
+            'حدث خطأ تقني. يرجى إعادة المحاولة.',
+            'أنا آسف، لكنني أواجه مشكلة تقنية. حاول مرة أخرى.'
+        ];
+        
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+}
+
+function generateApiKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = 'rel_';
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+async function updateUserUsage(userId, type) {
+    try {
+        const usageRef = db.ref(`users/${userId}/usage`);
+        const snapshot = await usageRef.once('value');
+        const currentUsage = snapshot.val() || { conversations: 0, apiCalls: 0 };
+
+        const updates = {
+            [type]: (currentUsage[type] || 0) + 1,
+            lastUsed: new Date().toISOString()
+        };
+
+        await usageRef.update(updates);
+    } catch (error) {
+        console.error('Update usage error:', error);
+    }
+}
+
+async function updateApiKeyUsage(userId, apiKey) {
+    try {
+        const keyRef = db.ref(`apiKeys/${userId}/${apiKey}`);
+        const snapshot = await keyRef.once('value');
+        const keyData = snapshot.val();
+
+        if (keyData) {
+            await keyRef.update({
+                usage: (keyData.usage || 0) + 1,
+                lastUsed: new Date().toISOString()
+            });
+        }
+    } catch (error) {
+        console.error('Update API key usage error:', error);
+    }
+}
 
 // Error handling middleware
 app.use((error, req, res, next) => {
     console.error('Unhandled error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
-    res.status(404).json({ error: 'Route not found' });
+    res.status(404).json({ error: 'Endpoint not found' });
 });
 
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Relosity AI Backend Server running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🤖 AI Chat: http://localhost:${PORT}/api/ai/chat`);
-    console.log(`🔑 API Keys: http://localhost:${PORT}/api/keys`);
+    console.log(`🔗 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 module.exports = app;

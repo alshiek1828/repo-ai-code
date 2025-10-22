@@ -31,7 +31,7 @@ self.addEventListener('install', (event) => {
                 return cache.addAll(STATIC_FILES);
             })
             .then(() => {
-                console.log('Service Worker: Static files cached');
+                console.log('Service Worker: Static files cached successfully');
                 return self.skipWaiting();
             })
             .catch((error) => {
@@ -57,7 +57,7 @@ self.addEventListener('activate', (event) => {
                 );
             })
             .then(() => {
-                console.log('Service Worker: Activated');
+                console.log('Service Worker: Activated successfully');
                 return self.clients.claim();
             })
     );
@@ -75,8 +75,9 @@ self.addEventListener('fetch', (event) => {
     
     // Skip Firebase and external API requests
     if (url.hostname.includes('firebase') || 
-        url.hostname.includes('openai') || 
-        url.hostname.includes('googleapis')) {
+        url.hostname.includes('googleapis') || 
+        url.hostname.includes('openai') ||
+        url.hostname.includes('api.relosity-ai.com')) {
         return;
     }
     
@@ -89,7 +90,7 @@ self.addEventListener('fetch', (event) => {
                     return cachedResponse;
                 }
                 
-                // Otherwise fetch from network
+                // Otherwise, fetch from network
                 return fetch(request)
                     .then((response) => {
                         // Don't cache if not a valid response
@@ -108,14 +109,28 @@ self.addEventListener('fetch', (event) => {
                         
                         return response;
                     })
-                    .catch(() => {
+                    .catch((error) => {
+                        console.log('Service Worker: Network request failed', error);
+                        
                         // Return offline page for navigation requests
                         if (request.destination === 'document') {
                             return caches.match('/index.html');
                         }
                         
-                        // Return cached version of the file
-                        return caches.match(request);
+                        // Return a custom offline response for other requests
+                        return new Response(
+                            JSON.stringify({
+                                error: 'Offline',
+                                message: 'You are currently offline. Please check your internet connection.'
+                            }),
+                            {
+                                status: 503,
+                                statusText: 'Service Unavailable',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            }
+                        );
                     });
             })
     );
@@ -123,40 +138,41 @@ self.addEventListener('fetch', (event) => {
 
 // Background sync for offline actions
 self.addEventListener('sync', (event) => {
-    console.log('Service Worker: Background sync', event.tag);
+    console.log('Service Worker: Background sync triggered', event.tag);
     
     if (event.tag === 'background-sync') {
-        event.waitUntil(doBackgroundSync());
+        event.waitUntil(
+            // Handle background sync tasks
+            handleBackgroundSync()
+        );
     }
 });
 
-// Push notification event
+// Push notification handling
 self.addEventListener('push', (event) => {
     console.log('Service Worker: Push notification received');
     
     const options = {
-        body: event.data ? event.data.text() : 'إشعار جديد من Relosity AI',
+        body: event.data ? event.data.text() : 'لديك إشعار جديد من Relosity AI',
         icon: '/assets/icons/icon-192x192.png',
         badge: '/assets/icons/badge-72x72.png',
-        vibrate: [200, 100, 200],
+        vibrate: [100, 50, 100],
         data: {
             dateOfArrival: Date.now(),
             primaryKey: 1
         },
         actions: [
             {
-                action: 'open',
-                title: 'فتح التطبيق',
-                icon: '/assets/icons/open-icon.png'
+                action: 'explore',
+                title: 'عرض',
+                icon: '/assets/icons/checkmark.png'
             },
             {
                 action: 'close',
                 title: 'إغلاق',
-                icon: '/assets/icons/close-icon.png'
+                icon: '/assets/icons/xmark.png'
             }
-        ],
-        requireInteraction: true,
-        silent: false
+        ]
     };
     
     event.waitUntil(
@@ -164,20 +180,37 @@ self.addEventListener('push', (event) => {
     );
 });
 
-// Notification click event
+// Notification click handling
 self.addEventListener('notificationclick', (event) => {
-    console.log('Service Worker: Notification clicked', event.action);
+    console.log('Service Worker: Notification clicked');
     
     event.notification.close();
     
-    if (event.action === 'open') {
+    if (event.action === 'explore') {
         event.waitUntil(
             clients.openWindow('/dashboard.html')
+        );
+    } else if (event.action === 'close') {
+        // Just close the notification
+        return;
+    } else {
+        // Default action - open the app
+        event.waitUntil(
+            clients.matchAll().then((clientList) => {
+                for (const client of clientList) {
+                    if (client.url === '/' && 'focus' in client) {
+                        return client.focus();
+                    }
+                }
+                if (clients.openWindow) {
+                    return clients.openWindow('/');
+                }
+            })
         );
     }
 });
 
-// Message event for communication with main thread
+// Message handling from main thread
 self.addEventListener('message', (event) => {
     console.log('Service Worker: Message received', event.data);
     
@@ -186,21 +219,18 @@ self.addEventListener('message', (event) => {
     }
     
     if (event.data && event.data.type === 'CACHE_URLS') {
-        const urlsToCache = event.data.urls;
         event.waitUntil(
             caches.open(DYNAMIC_CACHE)
                 .then((cache) => {
-                    return cache.addAll(urlsToCache);
+                    return cache.addAll(event.data.urls);
                 })
         );
     }
 });
 
-// Background sync function
-async function doBackgroundSync() {
+// Helper function for background sync
+async function handleBackgroundSync() {
     try {
-        console.log('Service Worker: Performing background sync');
-        
         // Get pending offline actions from IndexedDB
         const pendingActions = await getPendingActions();
         
@@ -212,20 +242,17 @@ async function doBackgroundSync() {
                 console.error('Service Worker: Error processing offline action', error);
             }
         }
-        
-        console.log('Service Worker: Background sync completed');
     } catch (error) {
-        console.error('Service Worker: Background sync failed', error);
+        console.error('Service Worker: Background sync error', error);
     }
 }
 
-// Get pending actions from IndexedDB
+// Helper function to get pending actions from IndexedDB
 async function getPendingActions() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('RelosityOfflineDB', 1);
         
         request.onerror = () => reject(request.error);
-        
         request.onsuccess = () => {
             const db = request.result;
             const transaction = db.transaction(['pendingActions'], 'readonly');
@@ -236,8 +263,8 @@ async function getPendingActions() {
             getAllRequest.onerror = () => reject(getAllRequest.error);
         };
         
-        request.onupgradeneeded = () => {
-            const db = request.result;
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
             if (!db.objectStoreNames.contains('pendingActions')) {
                 db.createObjectStore('pendingActions', { keyPath: 'id' });
             }
@@ -245,7 +272,7 @@ async function getPendingActions() {
     });
 }
 
-// Process offline action
+// Helper function to process offline actions
 async function processOfflineAction(action) {
     const response = await fetch(action.url, {
         method: action.method,
@@ -260,13 +287,12 @@ async function processOfflineAction(action) {
     return response;
 }
 
-// Remove pending action from IndexedDB
+// Helper function to remove processed action
 async function removePendingAction(actionId) {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('RelosityOfflineDB', 1);
         
         request.onerror = () => reject(request.error);
-        
         request.onsuccess = () => {
             const db = request.result;
             const transaction = db.transaction(['pendingActions'], 'readwrite');
@@ -281,72 +307,25 @@ async function removePendingAction(actionId) {
 
 // Periodic background sync (if supported)
 self.addEventListener('periodicsync', (event) => {
-    console.log('Service Worker: Periodic sync', event.tag);
-    
     if (event.tag === 'content-sync') {
-        event.waitUntil(doBackgroundSync());
+        event.waitUntil(
+            syncContent()
+        );
     }
 });
 
-// Handle app updates
-self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'APP_UPDATE_AVAILABLE') {
-        console.log('Service Worker: App update available');
+// Helper function for periodic content sync
+async function syncContent() {
+    try {
+        // Sync user data, conversations, etc.
+        console.log('Service Worker: Periodic sync triggered');
         
-        // Notify all clients about the update
-        self.clients.matchAll().then((clients) => {
-            clients.forEach((client) => {
-                client.postMessage({
-                    type: 'APP_UPDATE_AVAILABLE',
-                    message: 'تحديث جديد متاح للتطبيق'
-                });
-            });
-        });
+        // This would typically sync user data with the server
+        // when the user comes back online
+        
+    } catch (error) {
+        console.error('Service Worker: Periodic sync error', error);
     }
-});
-
-// Cache management
-async function cleanupOldCaches() {
-    const cacheNames = await caches.keys();
-    const oldCaches = cacheNames.filter(name => 
-        name.startsWith('relosity-') && 
-        name !== STATIC_CACHE && 
-        name !== DYNAMIC_CACHE
-    );
-    
-    return Promise.all(
-        oldCaches.map(cacheName => caches.delete(cacheName))
-    );
 }
-
-// Initialize IndexedDB for offline storage
-function initIndexedDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('RelosityOfflineDB', 1);
-        
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-        
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            
-            // Create object stores
-            if (!db.objectStoreNames.contains('pendingActions')) {
-                db.createObjectStore('pendingActions', { keyPath: 'id' });
-            }
-            
-            if (!db.objectStoreNames.contains('conversations')) {
-                db.createObjectStore('conversations', { keyPath: 'id' });
-            }
-            
-            if (!db.objectStoreNames.contains('settings')) {
-                db.createObjectStore('settings', { keyPath: 'key' });
-            }
-        };
-    });
-}
-
-// Initialize on service worker start
-initIndexedDB().catch(console.error);
 
 console.log('Service Worker: Loaded successfully');

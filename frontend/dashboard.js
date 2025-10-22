@@ -1,663 +1,419 @@
 // Import Firebase modules
-import { initializeApp } from 'firebase/app';
-import { getAuth, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
-import { getDatabase, ref, set, get, push, onValue, off, remove } from 'firebase/database';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { 
+    getAuth, 
+    signOut, 
+    onAuthStateChanged,
+    updateProfile,
+    updatePassword,
+    reauthenticateWithCredential,
+    EmailAuthProvider
+} from 'firebase/auth';
+import { 
+    getDatabase, 
+    ref, 
+    set, 
+    get, 
+    push, 
+    onValue, 
+    off,
+    update,
+    remove
+} from 'firebase/database';
+import { 
+    getStorage, 
+    ref as storageRef, 
+    uploadBytes, 
+    getDownloadURL 
+} from 'firebase/storage';
 
-// Firebase Configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyDZt1RSz5d9wyn-C5S3kF8XVYjEldtSZss",
-    authDomain: "gmae-fae90.firebaseapp.com",
-    databaseURL: "https://gmae-fae90-default-rtdb.firebaseio.com",
-    projectId: "gmae-fae90",
-    storageBucket: "gmae-fae90.firebasestorage.app",
-    messagingSenderId: "768482186329",
-    appId: "1:768482186329:web:ae3b54ed2aaaf89d4e0d48",
-    measurementId: "G-KGQ0RQ33XS"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
-const storage = getStorage(app);
+// Import from main app
+import { auth, database, storage, currentUser, utils } from './app.js';
 
 // Global Variables
-let currentUser = null;
-let currentSection = 'dashboard';
-let apiKeys = [];
-let conversations = [];
-let isDarkMode = localStorage.getItem('theme') === 'dark';
+let userData = null;
+let userApiKeys = [];
+let currentChat = null;
+let chatHistory = [];
 
 // DOM Elements
-const loadingScreen = document.getElementById('loading-screen');
-const themeToggle = document.getElementById('theme-toggle');
-const userProfile = document.getElementById('user-profile');
-const userName = document.getElementById('user-name');
-const userAvatar = document.getElementById('user-avatar');
-const logoutBtn = document.querySelector('.logout-btn');
-
-// Initialize App
-document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
-    setupEventListeners();
-    setupAuthStateListener();
-    setupTheme();
-    setupCharts();
-});
-
-// Initialize App Function
-function initializeApp() {
-    // Hide loading screen after 1 second
-    setTimeout(() => {
-        loadingScreen.classList.add('hidden');
-    }, 1000);
-}
-
-// Setup Event Listeners
-function setupEventListeners() {
-    // Theme toggle
-    themeToggle.addEventListener('click', toggleTheme);
+const elements = {
+    // Loading
+    loadingScreen: document.getElementById('loading-screen'),
     
-    // Logout
-    logoutBtn.addEventListener('click', handleLogout);
+    // Sidebar
+    sidebar: document.getElementById('sidebar'),
+    sidebarToggle: document.getElementById('sidebar-toggle'),
+    mobileMenuBtn: document.getElementById('mobile-menu-btn'),
     
-    // Sidebar menu items
-    document.querySelectorAll('.menu-item').forEach(item => {
-        item.addEventListener('click', (e) => {
+    // Navigation
+    navLinks: document.querySelectorAll('.nav-link'),
+    
+    // Header
+    themeToggle: document.getElementById('theme-toggle'),
+    userMenuBtn: document.getElementById('user-menu-btn'),
+    userDropdown: document.getElementById('user-dropdown'),
+    userName: document.getElementById('user-name'),
+    userNameSmall: document.getElementById('user-name-small'),
+    userPlan: document.getElementById('user-plan'),
+    logoutBtn: document.getElementById('logout-btn'),
+    logoutLink: document.getElementById('logout-link'),
+    
+    // Content sections
+    contentSections: document.querySelectorAll('.content-section'),
+    pageTitle: document.getElementById('page-title'),
+    
+    // Dashboard
+    totalConversations: document.getElementById('total-conversations'),
+    totalApiCalls: document.getElementById('total-api-calls'),
+    activeTime: document.getElementById('active-time'),
+    successRate: document.getElementById('success-rate'),
+    activityList: document.getElementById('activity-list'),
+    usageChart: document.getElementById('usage-chart'),
+    
+    // Quick actions
+    newChatBtn: document.getElementById('new-chat-btn'),
+    generateApiBtn: document.getElementById('generate-api-btn'),
+    viewAnalyticsBtn: document.getElementById('view-analytics-btn'),
+    exportDataBtn: document.getElementById('export-data-btn'),
+    
+    // Chat
+    chatList: document.getElementById('chat-list'),
+    chatMessages: document.getElementById('chat-messages'),
+    chatInput: document.getElementById('chat-input'),
+    sendBtn: document.getElementById('send-btn'),
+    newChatMainBtn: document.getElementById('new-chat-main-btn'),
+    
+    // API Keys
+    apiKeysList: document.getElementById('api-keys-list'),
+    createApiKeyBtn: document.getElementById('create-api-key-btn'),
+    
+    // Modals
+    createApiKeyModal: document.getElementById('create-api-key-modal'),
+    apiKeyDetailsModal: document.getElementById('api-key-details-modal'),
+    createApiKeyForm: document.getElementById('create-api-key-form'),
+    
+    // Settings
+    profileForm: document.getElementById('profile-form'),
+    passwordForm: document.getElementById('password-form'),
+    tabBtns: document.querySelectorAll('.tab-btn'),
+    tabContents: document.querySelectorAll('.tab-content')
+};
+
+// Theme Management
+const themeManager = {
+    init() {
+        const savedTheme = localStorage.getItem('theme');
+        const isDarkMode = savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+        elements.themeToggle.innerHTML = `<i class="fas fa-${isDarkMode ? 'sun' : 'moon'}"></i>`;
+        
+        this.bindEvents();
+    },
+    
+    bindEvents() {
+        elements.themeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            elements.themeToggle.innerHTML = `<i class="fas fa-${newTheme === 'dark' ? 'sun' : 'moon'}></i>`;
+            localStorage.setItem('theme', newTheme);
+        });
+    }
+};
+
+// Navigation Management
+const navigation = {
+    init() {
+        this.bindEvents();
+    },
+    
+    bindEvents() {
+        // Sidebar toggle
+        elements.sidebarToggle.addEventListener('click', () => {
+            elements.sidebar.classList.toggle('collapsed');
+        });
+        
+        // Mobile menu toggle
+        elements.mobileMenuBtn.addEventListener('click', () => {
+            elements.sidebar.classList.toggle('active');
+        });
+        
+        // Navigation links
+        elements.navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = link.dataset.section;
+                this.showSection(section);
+                
+                // Update active link
+                elements.navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                // Close mobile menu
+                elements.sidebar.classList.remove('active');
+            });
+        });
+        
+        // User menu
+        elements.userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            elements.userDropdown.classList.toggle('active');
+        });
+        
+        // Close user menu when clicking outside
+        document.addEventListener('click', () => {
+            elements.userDropdown.classList.remove('active');
+        });
+        
+        // Logout
+        elements.logoutBtn.addEventListener('click', () => authManager.signOut());
+        elements.logoutLink.addEventListener('click', (e) => {
             e.preventDefault();
-            const section = item.getAttribute('data-section');
-            switchSection(section);
+            authManager.signOut();
         });
-    });
+    },
     
-    // Chat functionality
-    setupChat();
+    showSection(sectionName) {
+        // Hide all sections
+        elements.contentSections.forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        // Show target section
+        const targetSection = document.getElementById(`${sectionName}-section`);
+        if (targetSection) {
+            targetSection.classList.add('active');
+        }
+        
+        // Update page title
+        const titles = {
+            'dashboard': 'لوحة التحكم',
+            'chat': 'المحادثات',
+            'api-keys': 'مفاتيح API',
+            'analytics': 'الإحصائيات',
+            'settings': 'الإعدادات',
+            'help': 'المساعدة'
+        };
+        
+        elements.pageTitle.textContent = titles[sectionName] || 'لوحة التحكم';
+        
+        // Load section data
+        this.loadSectionData(sectionName);
+    },
     
-    // API Keys functionality
-    setupApiKeys();
-    
-    // Settings functionality
-    setupSettings();
-    
-    // Modal functionality
-    setupModals();
-}
+    loadSectionData(sectionName) {
+        switch (sectionName) {
+            case 'dashboard':
+                dashboardManager.loadDashboardData();
+                break;
+            case 'chat':
+                chatManager.loadChats();
+                break;
+            case 'api-keys':
+                apiKeyManager.loadApiKeys();
+                break;
+            case 'analytics':
+                analyticsManager.loadAnalytics();
+                break;
+            case 'settings':
+                settingsManager.loadSettings();
+                break;
+        }
+    }
+};
 
-// Setup Auth State Listener
-function setupAuthStateListener() {
-    onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        if (user) {
-            updateUserUI();
-            loadUserData();
-        } else {
-            // Redirect to login if not authenticated
+// Authentication Management
+const authManager = {
+    init() {
+        this.checkAuthState();
+    },
+    
+    checkAuthState() {
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                this.loadUserData();
+                this.updateUI();
+            } else {
+                // Redirect to login
+                window.location.href = 'index.html';
+            }
+        });
+    },
+    
+    async loadUserData() {
+        try {
+            const userRef = ref(database, `users/${currentUser.uid}`);
+            const snapshot = await get(userRef);
+            
+            if (snapshot.exists()) {
+                userData = snapshot.val();
+                this.updateUserInfo();
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+            utils.showNotification('خطأ في تحميل بيانات المستخدم', 'error');
+        }
+    },
+    
+    updateUserInfo() {
+        if (userData) {
+            elements.userName.textContent = userData.name || 'المستخدم';
+            elements.userNameSmall.textContent = userData.name || 'المستخدم';
+            elements.userPlan.textContent = this.getPlanName(userData.plan || 'free');
+        }
+    },
+    
+    getPlanName(plan) {
+        const plans = {
+            'free': 'الخطة المجانية',
+            'pro': 'الخطة المتقدمة',
+            'enterprise': 'الخطة المؤسسية'
+        };
+        return plans[plan] || 'الخطة المجانية';
+    },
+    
+    updateUI() {
+        if (currentUser) {
+            elements.userName.textContent = currentUser.displayName || 'المستخدم';
+            elements.userNameSmall.textContent = currentUser.displayName || 'المستخدم';
+        }
+    },
+    
+    async signOut() {
+        try {
+            await signOut(auth);
             window.location.href = 'index.html';
-        }
-    });
-}
-
-// Update User UI
-function updateUserUI() {
-    if (currentUser) {
-        userName.textContent = currentUser.displayName || 'المستخدم';
-        userAvatar.src = currentUser.photoURL || '/assets/default-avatar.png';
-    }
-}
-
-// Load User Data
-async function loadUserData() {
-    if (!currentUser) return;
-    
-    try {
-        // Load API Keys
-        const apiKeysRef = ref(database, `users/${currentUser.uid}/apiKeys`);
-        onValue(apiKeysRef, (snapshot) => {
-            const data = snapshot.val();
-            apiKeys = data ? Object.entries(data).map(([id, key]) => ({ id, ...key })) : [];
-            updateApiKeysUI();
-            updateStats();
-        });
-        
-        // Load Conversations
-        const conversationsRef = ref(database, `users/${currentUser.uid}/conversations`);
-        onValue(conversationsRef, (snapshot) => {
-            const data = snapshot.val();
-            conversations = data ? Object.entries(data).map(([id, conv]) => ({ id, ...conv })) : [];
-            updateConversationsUI();
-            updateStats();
-        });
-        
-    } catch (error) {
-        console.error('Error loading user data:', error);
-        showNotification('خطأ في تحميل البيانات', 'error');
-    }
-}
-
-// Switch Section
-function switchSection(sectionName) {
-    // Update active menu item
-    document.querySelectorAll('.menu-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
-    
-    // Update active content section
-    document.querySelectorAll('.content-section').forEach(section => {
-        section.classList.remove('active');
-    });
-    document.getElementById(`${sectionName}-section`).classList.add('active');
-    
-    currentSection = sectionName;
-    
-    // Load section-specific data
-    if (sectionName === 'analytics') {
-        loadAnalyticsData();
-    }
-}
-
-// Setup Theme
-function setupTheme() {
-    if (isDarkMode) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-    } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-        themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
-    }
-}
-
-// Toggle Theme
-function toggleTheme() {
-    isDarkMode = !isDarkMode;
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    setupTheme();
-}
-
-// Update Stats
-function updateStats() {
-    document.getElementById('total-conversations').textContent = conversations.length;
-    document.getElementById('total-api-keys').textContent = apiKeys.length;
-    
-    // Calculate API usage
-    const totalUsage = apiKeys.reduce((sum, key) => sum + (key.usage || 0), 0);
-    document.getElementById('api-usage').textContent = totalUsage;
-    
-    // Calculate days active
-    if (currentUser && currentUser.metadata && currentUser.metadata.creationTime) {
-        const joinDate = new Date(currentUser.metadata.creationTime);
-        const now = new Date();
-        const daysActive = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
-        document.getElementById('days-active').textContent = daysActive;
-    }
-}
-
-// Setup Chat
-function setupChat() {
-    const messageInput = document.getElementById('message-input');
-    const sendBtn = document.getElementById('send-btn');
-    const chatMessages = document.getElementById('chat-messages');
-    const clearChatBtn = document.getElementById('clear-chat');
-    const exportChatBtn = document.getElementById('export-chat');
-    
-    if (!messageInput || !sendBtn || !chatMessages) return;
-    
-    // Send message
-    function sendMessage() {
-        const message = messageInput.value.trim();
-        if (!message) return;
-        
-        // Add user message
-        addMessage(message, 'user');
-        messageInput.value = '';
-        
-        // Simulate AI response
-        setTimeout(() => {
-            const response = generateAIResponse(message);
-            addMessage(response, 'ai');
-            saveConversation(message, response);
-        }, 1000);
-    }
-    
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-    
-    // Clear chat
-    if (clearChatBtn) {
-        clearChatBtn.addEventListener('click', () => {
-            chatMessages.innerHTML = `
-                <div class="message ai-message">
-                    <div class="message-avatar">
-                        <i class="fas fa-robot"></i>
-                    </div>
-                    <div class="message-content">
-                        <p>مرحباً! أنا Relosity AI، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟</p>
-                        <span class="message-time">الآن</span>
-                    </div>
-                </div>
-            `;
-        });
-    }
-    
-    // Export chat
-    if (exportChatBtn) {
-        exportChatBtn.addEventListener('click', exportChat);
-    }
-    
-    // Suggestion buttons
-    document.querySelectorAll('.suggestion-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const suggestion = e.target.getAttribute('data-suggestion');
-            messageInput.value = suggestion;
-            messageInput.focus();
-        });
-    });
-}
-
-// Add Message to Chat
-function addMessage(content, sender) {
-    const chatMessages = document.getElementById('chat-messages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}-message`;
-    
-    const avatar = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
-    const time = new Date().toLocaleTimeString('ar-SA', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-    
-    messageDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="${avatar}"></i>
-        </div>
-        <div class="message-content">
-            <p>${content}</p>
-            <span class="message-time">${time}</span>
-        </div>
-    `;
-    
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// Generate AI Response
-function generateAIResponse(userMessage) {
-    const responses = [
-        "هذا سؤال ممتاز! دعني أساعدك في ذلك.",
-        "أفهم ما تقصده. إليك ما يمكنني إخبارك به:",
-        "هذا موضوع مهم جداً. بناءً على خبرتي، يمكنني القول أن:",
-        "شكراً لك على سؤالك. إليك الإجابة التفصيلية:",
-        "هذا سؤال متقدم! دعني أشرح لك بالتفصيل:"
-    ];
-    
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-    return `${randomResponse} ${userMessage} هو موضوع مهم ويستحق الدراسة المتأنية.`;
-}
-
-// Save Conversation
-async function saveConversation(userMessage, aiResponse) {
-    if (!currentUser) return;
-    
-    try {
-        const conversationRef = ref(database, `users/${currentUser.uid}/conversations`);
-        await push(conversationRef, {
-            userMessage,
-            aiResponse,
-            timestamp: new Date().toISOString(),
-            topic: extractTopic(userMessage)
-        });
-    } catch (error) {
-        console.error('Error saving conversation:', error);
-    }
-}
-
-// Extract Topic from Message
-function extractTopic(message) {
-    const topics = {
-        'ذكاء اصطناعي': ['ذكاء', 'اصطناعي', 'ai', 'artificial', 'intelligence'],
-        'برمجة': ['برمجة', 'كود', 'تطوير', 'programming', 'code'],
-        'تقنية': ['تقنية', 'تكنولوجيا', 'technology', 'tech'],
-        'تعلم': ['تعلم', 'دراسة', 'تعليم', 'learn', 'study'],
-        'أعمال': ['أعمال', 'عمل', 'تجارة', 'business', 'work']
-    };
-    
-    for (const [topic, keywords] of Object.entries(topics)) {
-        if (keywords.some(keyword => message.toLowerCase().includes(keyword))) {
-            return topic;
+        } catch (error) {
+            console.error('Sign out error:', error);
+            utils.showNotification('خطأ في تسجيل الخروج', 'error');
         }
     }
-    
-    return 'عام';
-}
+};
 
-// Export Chat
-function exportChat() {
-    const messages = document.querySelectorAll('.message');
-    let chatText = 'محادثة Relosity AI\n';
-    chatText += '='.repeat(50) + '\n\n';
+// Dashboard Management
+const dashboardManager = {
+    init() {
+        this.bindEvents();
+    },
     
-    messages.forEach(message => {
-        const content = message.querySelector('p').textContent;
-        const time = message.querySelector('.message-time').textContent;
-        const sender = message.classList.contains('user-message') ? 'المستخدم' : 'Relosity AI';
-        
-        chatText += `[${time}] ${sender}: ${content}\n\n`;
-    });
-    
-    const blob = new Blob([chatText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relosity-chat-${new Date().toISOString().split('T')[0]}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-// Setup API Keys
-function setupApiKeys() {
-    const createApiKeyBtn = document.getElementById('create-api-key-btn');
-    const createApiKeyForm = document.getElementById('create-api-key-form');
-    
-    if (createApiKeyBtn) {
-        createApiKeyBtn.addEventListener('click', () => {
-            showModal('create-api-key-modal');
-        });
-    }
-    
-    if (createApiKeyForm) {
-        createApiKeyForm.addEventListener('submit', handleCreateApiKey);
-    }
-}
-
-// Update API Keys UI
-function updateApiKeysUI() {
-    const apiKeysList = document.getElementById('api-keys-list');
-    if (!apiKeysList) return;
-    
-    if (apiKeys.length === 0) {
-        apiKeysList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-key"></i>
-                <h3>لا توجد مفاتيح API</h3>
-                <p>قم بإنشاء مفتاح API أولاً لبدء الاستخدام</p>
-                <button class="btn-primary" onclick="showModal('create-api-key-modal')">
-                    <i class="fas fa-plus"></i>
-                    إنشاء مفتاح جديد
-                </button>
-            </div>
-        `;
-        return;
-    }
-    
-    apiKeysList.innerHTML = apiKeys.map(key => `
-        <div class="api-key-item">
-            <div class="api-key-info">
-                <div class="api-key-name">${key.name}</div>
-                <div class="api-key-value">${key.key}</div>
-                <div class="api-key-usage">
-                    الاستخدام: ${key.usage || 0} / ${key.limit === 'unlimited' ? '∞' : key.limit}
-                </div>
-            </div>
-            <div class="api-key-actions">
-                <button class="api-key-btn btn-copy" onclick="copyApiKey('${key.key}')">
-                    <i class="fas fa-copy"></i>
-                    نسخ
-                </button>
-                <button class="api-key-btn btn-details" onclick="showApiKeyDetails('${key.id}')">
-                    <i class="fas fa-info"></i>
-                    تفاصيل
-                </button>
-                <button class="api-key-btn btn-delete" onclick="deleteApiKey('${key.id}')">
-                    <i class="fas fa-trash"></i>
-                    حذف
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Handle Create API Key
-async function handleCreateApiKey(e) {
-    e.preventDefault();
-    
-    const name = document.getElementById('api-key-name').value;
-    const limit = document.getElementById('api-key-limit').value;
-    const apiKey = generateApiKey();
-    
-    try {
-        const apiKeyRef = ref(database, `users/${currentUser.uid}/apiKeys/${apiKey}`);
-        await set(apiKeyRef, {
-            key: apiKey,
-            name: name,
-            createdAt: new Date().toISOString(),
-            usage: 0,
-            limit: limit
+    bindEvents() {
+        elements.newChatBtn.addEventListener('click', () => {
+            navigation.showSection('chat');
+            chatManager.startNewChat();
         });
         
-        hideModal('create-api-key-modal');
-        showNotification('تم إنشاء مفتاح API بنجاح!', 'success');
-        document.getElementById('create-api-key-form').reset();
-    } catch (error) {
-        console.error('Error creating API key:', error);
-        showNotification('خطأ في إنشاء مفتاح API', 'error');
-    }
-}
-
-// Generate API Key
-function generateApiKey() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'rel_';
-    for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-// Copy API Key
-function copyApiKey(key) {
-    navigator.clipboard.writeText(key).then(() => {
-        showNotification('تم نسخ مفتاح API', 'success');
-    }).catch(() => {
-        showNotification('خطأ في نسخ مفتاح API', 'error');
-    });
-}
-
-// Show API Key Details
-function showApiKeyDetails(keyId) {
-    const key = apiKeys.find(k => k.id === keyId);
-    if (!key) return;
+        elements.generateApiBtn.addEventListener('click', () => {
+            navigation.showSection('api-keys');
+            apiKeyManager.showCreateModal();
+        });
+        
+        elements.viewAnalyticsBtn.addEventListener('click', () => {
+            navigation.showSection('analytics');
+        });
+        
+        elements.exportDataBtn.addEventListener('click', () => {
+            this.exportUserData();
+        });
+    },
     
-    document.getElementById('details-key-name').value = key.name;
-    document.getElementById('details-api-key').value = key.key;
-    document.getElementById('details-created-at').value = new Date(key.createdAt).toLocaleDateString('ar-SA');
+    async loadDashboardData() {
+        if (!currentUser) return;
+        
+        try {
+            // Load user stats
+            const statsRef = ref(database, `users/${currentUser.uid}/usage`);
+            const statsSnapshot = await get(statsRef);
+            
+            if (statsSnapshot.exists()) {
+                const stats = statsSnapshot.val();
+                this.updateStats(stats);
+            }
+            
+            // Load recent activity
+            this.loadRecentActivity();
+            
+            // Load usage chart
+            this.loadUsageChart();
+            
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            utils.showNotification('خطأ في تحميل بيانات لوحة التحكم', 'error');
+        }
+    },
     
-    const usage = key.usage || 0;
-    const limit = key.limit === 'unlimited' ? 1000 : parseInt(key.limit);
-    const percentage = Math.min((usage / limit) * 100, 100);
+    updateStats(stats) {
+        elements.totalConversations.textContent = stats.conversations || 0;
+        elements.totalApiCalls.textContent = stats.apiCalls || 0;
+        elements.activeTime.textContent = this.calculateActiveTime(stats);
+        elements.successRate.textContent = this.calculateSuccessRate(stats) + '%';
+    },
     
-    document.getElementById('usage-progress').style.width = `${percentage}%`;
-    document.getElementById('usage-text').textContent = `${usage} / ${key.limit === 'unlimited' ? '∞' : key.limit}`;
+    calculateActiveTime(stats) {
+        // Simple calculation based on API calls
+        const hours = Math.floor((stats.apiCalls || 0) / 10);
+        return hours;
+    },
     
-    showModal('api-key-details-modal');
-}
-
-// Delete API Key
-async function deleteApiKey(keyId) {
-    if (!confirm('هل أنت متأكد من حذف هذا المفتاح؟')) return;
+    calculateSuccessRate(stats) {
+        // Simple calculation - in real app, this would be more complex
+        const successRate = Math.min(95, 80 + Math.random() * 15);
+        return Math.round(successRate);
+    },
     
-    try {
-        const apiKeyRef = ref(database, `users/${currentUser.uid}/apiKeys/${keyId}`);
-        await remove(apiKeyRef);
-        showNotification('تم حذف مفتاح API', 'success');
-    } catch (error) {
-        console.error('Error deleting API key:', error);
-        showNotification('خطأ في حذف مفتاح API', 'error');
-    }
-}
-
-// Update Conversations UI
-function updateConversationsUI() {
-    const conversationsList = document.getElementById('conversations-list');
-    if (!conversationsList) return;
+    async loadRecentActivity() {
+        try {
+            const activityRef = ref(database, `users/${currentUser.uid}/activity`);
+            const snapshot = await get(activityRef);
+            
+            if (snapshot.exists()) {
+                const activities = snapshot.val();
+                this.displayRecentActivity(activities);
+            }
+        } catch (error) {
+            console.error('Error loading recent activity:', error);
+        }
+    },
     
-    if (conversations.length === 0) {
-        conversationsList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-comments"></i>
-                <h3>لا توجد محادثات</h3>
-                <p>ابدأ محادثة جديدة مع Relosity AI</p>
-            </div>
-        `;
-        return;
-    }
-    
-    conversationsList.innerHTML = conversations
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        .map(conv => `
-            <div class="conversation-item" onclick="loadConversation('${conv.id}')">
-                <div class="conversation-info">
-                    <div class="conversation-title">${conv.topic || 'محادثة عامة'}</div>
-                    <div class="conversation-preview">${conv.userMessage.substring(0, 100)}...</div>
-                    <div class="conversation-meta">
-                        <span>${new Date(conv.timestamp).toLocaleDateString('ar-SA')}</span>
-                        <span>${new Date(conv.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
+    displayRecentActivity(activities) {
+        const activityList = Object.values(activities).slice(-5).reverse();
+        
+        elements.activityList.innerHTML = activityList.map(activity => `
+            <div class="activity-item">
+                <div class="activity-icon">
+                    <i class="fas fa-${activity.type === 'chat' ? 'comment' : 'key'}"></i>
                 </div>
-                <div class="conversation-actions">
-                    <button class="api-key-btn btn-details" onclick="event.stopPropagation(); loadConversation('${conv.id}')">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="api-key-btn btn-delete" onclick="event.stopPropagation(); deleteConversation('${conv.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                <div class="activity-content">
+                    <div class="activity-title">${activity.title}</div>
+                    <div class="activity-time">${utils.formatDate(new Date(activity.timestamp))}</div>
                 </div>
             </div>
         `).join('');
-}
-
-// Load Conversation
-function loadConversation(conversationId) {
-    const conversation = conversations.find(c => c.id === conversationId);
-    if (!conversation) return;
+    },
     
-    // Switch to chat section
-    switchSection('chat');
-    
-    // Clear current chat
-    const chatMessages = document.getElementById('chat-messages');
-    chatMessages.innerHTML = '';
-    
-    // Add conversation messages
-    addMessage(conversation.userMessage, 'user');
-    addMessage(conversation.aiResponse, 'ai');
-}
-
-// Delete Conversation
-async function deleteConversation(conversationId) {
-    if (!confirm('هل أنت متأكد من حذف هذه المحادثة؟')) return;
-    
-    try {
-        const conversationRef = ref(database, `users/${currentUser.uid}/conversations/${conversationId}`);
-        await remove(conversationRef);
-        showNotification('تم حذف المحادثة', 'success');
-    } catch (error) {
-        console.error('Error deleting conversation:', error);
-        showNotification('خطأ في حذف المحادثة', 'error');
-    }
-}
-
-// Setup Settings
-function setupSettings() {
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tab = btn.getAttribute('data-tab');
-            switchSettingsTab(tab);
-        });
-    });
-    
-    // Update profile
-    const updateProfileBtn = document.getElementById('update-profile-btn');
-    if (updateProfileBtn) {
-        updateProfileBtn.addEventListener('click', handleUpdateProfile);
-    }
-    
-    // Load user settings
-    loadUserSettings();
-}
-
-// Switch Settings Tab
-function switchSettingsTab(tabName) {
-    // Update active tab button
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    
-    // Update active tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-}
-
-// Load User Settings
-function loadUserSettings() {
-    if (!currentUser) return;
-    
-    // Load profile data
-    document.getElementById('profile-name').value = currentUser.displayName || '';
-    document.getElementById('profile-email').value = currentUser.email || '';
-    
-    if (currentUser.metadata && currentUser.metadata.creationTime) {
-        const joinDate = new Date(currentUser.metadata.creationTime).toLocaleDateString('ar-SA');
-        document.getElementById('profile-join-date').value = joinDate;
-    }
-}
-
-// Handle Update Profile
-async function handleUpdateProfile() {
-    const name = document.getElementById('profile-name').value;
-    
-    try {
-        await updateProfile(currentUser, { displayName: name });
-        showNotification('تم تحديث الملف الشخصي', 'success');
-        updateUserUI();
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        showNotification('خطأ في تحديث الملف الشخصي', 'error');
-    }
-}
-
-// Setup Charts
-function setupCharts() {
-    // This will be called when analytics section is loaded
-}
-
-// Load Analytics Data
-function loadAnalyticsData() {
-    // API Usage Chart
-    const apiUsageCtx = document.getElementById('api-usage-chart');
-    if (apiUsageCtx) {
-        new Chart(apiUsageCtx, {
+    loadUsageChart() {
+        const ctx = elements.usageChart.getContext('2d');
+        
+        // Sample data - in real app, this would come from database
+        const data = {
+            labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
+            datasets: [{
+                label: 'استخدام API',
+                data: [12, 19, 3, 5, 2, 3],
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                tension: 0.4
+            }]
+        };
+        
+        new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: generateLast7Days(),
-                datasets: [{
-                    label: 'استخدام API',
-                    data: generateRandomData(7, 0, 100),
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                    tension: 0.4
-                }]
-            },
+            data: data,
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         display: false
@@ -670,236 +426,660 @@ function loadAnalyticsData() {
                 }
             }
         });
-    }
+    },
     
-    // Conversations Chart
-    const conversationsCtx = document.getElementById('conversations-chart');
-    if (conversationsCtx) {
-        new Chart(conversationsCtx, {
+    async exportUserData() {
+        try {
+            const userRef = ref(database, `users/${currentUser.uid}`);
+            const snapshot = await get(userRef);
+            
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const dataStr = JSON.stringify(data, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `relosity-data-${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                
+                URL.revokeObjectURL(url);
+                utils.showNotification('تم تصدير البيانات بنجاح', 'success');
+            }
+        } catch (error) {
+            console.error('Error exporting data:', error);
+            utils.showNotification('خطأ في تصدير البيانات', 'error');
+        }
+    }
+};
+
+// Chat Management
+const chatManager = {
+    init() {
+        this.bindEvents();
+    },
+    
+    bindEvents() {
+        elements.newChatMainBtn.addEventListener('click', () => {
+            this.startNewChat();
+        });
+        
+        elements.sendBtn.addEventListener('click', () => {
+            this.sendMessage();
+        });
+        
+        elements.chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.sendMessage();
+            }
+        });
+    },
+    
+    async loadChats() {
+        try {
+            const chatsRef = ref(database, `users/${currentUser.uid}/chats`);
+            const snapshot = await get(chatsRef);
+            
+            if (snapshot.exists()) {
+                const chats = snapshot.val();
+                this.displayChats(chats);
+            }
+        } catch (error) {
+            console.error('Error loading chats:', error);
+        }
+    },
+    
+    displayChats(chats) {
+        const chatList = Object.values(chats || {}).sort((a, b) => 
+            new Date(b.lastMessage) - new Date(a.lastMessage)
+        );
+        
+        elements.chatList.innerHTML = chatList.map(chat => `
+            <div class="chat-item" data-chat-id="${chat.id}">
+                <div class="chat-item-title">${chat.title}</div>
+                <div class="chat-item-preview">${chat.lastMessage || 'لا توجد رسائل'}</div>
+                <div class="chat-item-time">${utils.formatDate(new Date(chat.lastMessageTime))}</div>
+            </div>
+        `).join('');
+        
+        // Add click handlers
+        elements.chatList.querySelectorAll('.chat-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const chatId = item.dataset.chatId;
+                this.loadChat(chatId);
+            });
+        });
+    },
+    
+    startNewChat() {
+        currentChat = null;
+        elements.chatMessages.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <h3>مرحباً بك في Relosity AI</h3>
+                <p>ابدأ محادثة جديدة أو اختر محادثة من القائمة</p>
+            </div>
+        `;
+        elements.chatInput.disabled = false;
+        elements.sendBtn.disabled = false;
+    },
+    
+    async loadChat(chatId) {
+        try {
+            const chatRef = ref(database, `users/${currentUser.uid}/chats/${chatId}`);
+            const snapshot = await get(chatRef);
+            
+            if (snapshot.exists()) {
+                const chat = snapshot.val();
+                currentChat = chat;
+                this.displayChatMessages(chat.messages || []);
+            }
+        } catch (error) {
+            console.error('Error loading chat:', error);
+        }
+    },
+    
+    displayChatMessages(messages) {
+        elements.chatMessages.innerHTML = messages.map(message => `
+            <div class="message ${message.sender}">
+                <div class="message-avatar">
+                    <i class="fas fa-${message.sender === 'user' ? 'user' : 'robot'}"></i>
+                </div>
+                <div class="message-content">
+                    <p>${message.content}</p>
+                    <div class="message-time">${utils.formatDate(new Date(message.timestamp))}</div>
+                </div>
+            </div>
+        `).join('');
+        
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    },
+    
+    async sendMessage() {
+        const message = elements.chatInput.value.trim();
+        if (!message) return;
+        
+        // Add user message to UI
+        this.addMessageToUI(message, 'user');
+        elements.chatInput.value = '';
+        
+        // Create chat if it doesn't exist
+        if (!currentChat) {
+            currentChat = await this.createNewChat();
+        }
+        
+        // Send to AI and get response
+        try {
+            const response = await this.getAIResponse(message);
+            this.addMessageToUI(response, 'ai');
+            
+            // Save messages to database
+            await this.saveMessage(message, 'user');
+            await this.saveMessage(response, 'ai');
+            
+        } catch (error) {
+            console.error('Error getting AI response:', error);
+            this.addMessageToUI('عذراً، حدث خطأ في معالجة رسالتك. حاول مرة أخرى.', 'ai');
+        }
+    },
+    
+    addMessageToUI(content, sender) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender}`;
+        
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <i class="fas fa-${sender === 'user' ? 'user' : 'robot'}"></i>
+            </div>
+            <div class="message-content">
+                <p>${content}</p>
+                <div class="message-time">الآن</div>
+            </div>
+        `;
+        
+        elements.chatMessages.appendChild(messageDiv);
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    },
+    
+    async createNewChat() {
+        const chatId = Date.now().toString();
+        const chatData = {
+            id: chatId,
+            title: 'محادثة جديدة',
+            createdAt: new Date().toISOString(),
+            lastMessage: '',
+            lastMessageTime: new Date().toISOString(),
+            messages: []
+        };
+        
+        await set(ref(database, `users/${currentUser.uid}/chats/${chatId}`), chatData);
+        return chatData;
+    },
+    
+    async getAIResponse(message) {
+        // This is a mock response - in real app, this would call OpenAI API
+        const responses = [
+            'هذا سؤال رائع! دعني أساعدك في ذلك.',
+            'أفهم ما تقصده. إليك ما يمكنني اقتراحه...',
+            'شكراً لك على سؤالك. هذا موضوع مهم جداً.',
+            'أنا هنا لمساعدتك. هل تريد المزيد من التفاصيل؟',
+            'هذا موضوع مثير للاهتمام. دعني أشرح لك...',
+            'أقدر سؤالك. إليك إجابتي التفصيلية...'
+        ];
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        
+        return responses[Math.floor(Math.random() * responses.length)];
+    },
+    
+    async saveMessage(content, sender) {
+        if (!currentChat) return;
+        
+        const message = {
+            content,
+            sender,
+            timestamp: new Date().toISOString()
+        };
+        
+        // Add to chat messages
+        const messagesRef = ref(database, `users/${currentUser.uid}/chats/${currentChat.id}/messages`);
+        await push(messagesRef, message);
+        
+        // Update chat last message
+        await update(ref(database, `users/${currentUser.uid}/chats/${currentChat.id}`), {
+            lastMessage: content,
+            lastMessageTime: new Date().toISOString()
+        });
+    }
+};
+
+// API Key Management
+const apiKeyManager = {
+    init() {
+        this.bindEvents();
+    },
+    
+    bindEvents() {
+        elements.createApiKeyBtn.addEventListener('click', () => {
+            this.showCreateModal();
+        });
+        
+        elements.createApiKeyForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.createApiKey();
+        });
+        
+        // Modal close handlers
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.closeModal(e.target.closest('.modal'));
+            });
+        });
+    },
+    
+    async loadApiKeys() {
+        try {
+            const apiKeysRef = ref(database, `apiKeys/${currentUser.uid}`);
+            const snapshot = await get(apiKeysRef);
+            
+            if (snapshot.exists()) {
+                const apiKeys = snapshot.val();
+                this.displayApiKeys(apiKeys);
+            }
+        } catch (error) {
+            console.error('Error loading API keys:', error);
+        }
+    },
+    
+    displayApiKeys(apiKeys) {
+        const keysList = Object.values(apiKeys || {});
+        
+        elements.apiKeysList.innerHTML = keysList.map(key => `
+            <div class="api-key-item">
+                <div class="api-key-header">
+                    <div class="api-key-name">${key.name}</div>
+                    <div class="api-key-status ${key.isActive ? 'active' : 'inactive'}">
+                        ${key.isActive ? 'نشط' : 'غير نشط'}
+                    </div>
+                </div>
+                <div class="api-key-details">
+                    <div class="api-key-detail">
+                        <label>المفتاح:</label>
+                        <span>${key.key.substring(0, 20)}...</span>
+                    </div>
+                    <div class="api-key-detail">
+                        <label>تاريخ الإنشاء:</label>
+                        <span>${utils.formatDate(new Date(key.createdAt))}</span>
+                    </div>
+                    <div class="api-key-detail">
+                        <label>الاستخدام:</label>
+                        <span>${key.usage || 0} / ${key.limit === 'unlimited' ? '∞' : key.limit}</span>
+                    </div>
+                </div>
+                <div class="api-key-actions">
+                    <button class="btn-secondary" onclick="apiKeyManager.viewKeyDetails('${key.key}')">
+                        <i class="fas fa-eye"></i> عرض التفاصيل
+                    </button>
+                    <button class="btn-secondary" onclick="apiKeyManager.copyKey('${key.key}')">
+                        <i class="fas fa-copy"></i> نسخ
+                    </button>
+                    <button class="btn-danger" onclick="apiKeyManager.deleteKey('${key.key}')">
+                        <i class="fas fa-trash"></i> حذف
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    },
+    
+    showCreateModal() {
+        elements.createApiKeyModal.classList.add('active');
+    },
+    
+    closeModal(modal) {
+        modal.classList.remove('active');
+    },
+    
+    async createApiKey() {
+        const name = document.getElementById('api-key-name').value;
+        const limit = document.getElementById('api-key-limit').value;
+        
+        if (!name.trim()) {
+            utils.showNotification('يرجى إدخال اسم المفتاح', 'error');
+            return;
+        }
+        
+        try {
+            const apiKey = utils.generateApiKey();
+            const keyData = {
+                key: apiKey,
+                name: name,
+                createdAt: new Date().toISOString(),
+                isActive: true,
+                usage: 0,
+                limit: limit === 'unlimited' ? 'unlimited' : parseInt(limit)
+            };
+            
+            await set(ref(database, `apiKeys/${currentUser.uid}/${apiKey}`), keyData);
+            
+            utils.showNotification('تم إنشاء مفتاح API بنجاح', 'success');
+            this.closeModal(elements.createApiKeyModal);
+            elements.createApiKeyForm.reset();
+            this.loadApiKeys();
+            
+        } catch (error) {
+            console.error('Error creating API key:', error);
+            utils.showNotification('خطأ في إنشاء مفتاح API', 'error');
+        }
+    },
+    
+    viewKeyDetails(key) {
+        // Load key details and show modal
+        const keyRef = ref(database, `apiKeys/${currentUser.uid}/${key}`);
+        get(keyRef).then(snapshot => {
+            if (snapshot.exists()) {
+                const keyData = snapshot.val();
+                this.showKeyDetailsModal(keyData);
+            }
+        });
+    },
+    
+    showKeyDetailsModal(keyData) {
+        document.getElementById('detail-key-name').textContent = keyData.name;
+        document.getElementById('detail-key-value').value = keyData.key;
+        document.getElementById('detail-key-date').textContent = utils.formatDate(new Date(keyData.createdAt));
+        document.getElementById('detail-key-usage').textContent = `${keyData.usage || 0} / ${keyData.limit === 'unlimited' ? '∞' : keyData.limit}`;
+        document.getElementById('detail-key-status').textContent = keyData.isActive ? 'نشط' : 'غير نشط';
+        
+        elements.apiKeyDetailsModal.classList.add('active');
+    },
+    
+    copyKey(key) {
+        navigator.clipboard.writeText(key).then(() => {
+            utils.showNotification('تم نسخ المفتاح بنجاح', 'success');
+        }).catch(() => {
+            utils.showNotification('خطأ في نسخ المفتاح', 'error');
+        });
+    },
+    
+    async deleteKey(key) {
+        if (!confirm('هل أنت متأكد من حذف هذا المفتاح؟')) return;
+        
+        try {
+            await remove(ref(database, `apiKeys/${currentUser.uid}/${key}`));
+            utils.showNotification('تم حذف المفتاح بنجاح', 'success');
+            this.loadApiKeys();
+        } catch (error) {
+            console.error('Error deleting API key:', error);
+            utils.showNotification('خطأ في حذف المفتاح', 'error');
+        }
+    }
+};
+
+// Analytics Management
+const analyticsManager = {
+    init() {
+        this.bindEvents();
+    },
+    
+    bindEvents() {
+        // Analytics-specific event handlers can be added here
+    },
+    
+    loadAnalytics() {
+        this.loadMonthlyUsageChart();
+        this.loadRequestTypesChart();
+        this.loadPeakHoursChart();
+        this.loadResponseTimeChart();
+    },
+    
+    loadMonthlyUsageChart() {
+        const ctx = document.getElementById('monthly-usage-chart').getContext('2d');
+        
+        new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: generateLast7Days(),
+                labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
                 datasets: [{
-                    label: 'المحادثات',
-                    data: generateRandomData(7, 0, 50),
-                    backgroundColor: '#8b5cf6',
-                    borderColor: '#7c3aed',
+                    label: 'استخدام API',
+                    data: [12, 19, 3, 5, 2, 3],
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: '#6366f1',
                     borderWidth: 1
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         display: false
                     }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
+                }
+            }
+        });
+    },
+    
+    loadRequestTypesChart() {
+        const ctx = document.getElementById('request-types-chart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['نص', 'صورة', 'صوت', 'أخرى'],
+                datasets: [{
+                    data: [40, 30, 20, 10],
+                    backgroundColor: [
+                        '#6366f1',
+                        '#8b5cf6',
+                        '#06b6d4',
+                        '#10b981'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    },
+    
+    loadPeakHoursChart() {
+        const ctx = document.getElementById('peak-hours-chart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                datasets: [{
+                    label: 'الطلبات',
+                    data: [5, 2, 15, 25, 20, 12],
+                    borderColor: '#06b6d4',
+                    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    },
+    
+    loadResponseTimeChart() {
+        const ctx = document.getElementById('response-time-chart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['< 1s', '1-2s', '2-5s', '> 5s'],
+                datasets: [{
+                    label: 'معدل الاستجابة',
+                    data: [60, 25, 10, 5],
+                    backgroundColor: [
+                        '#10b981',
+                        '#f59e0b',
+                        '#ef4444',
+                        '#6b7280'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
                     }
                 }
             }
         });
     }
-    
-    // Topics List
-    updateTopicsList();
-}
+};
 
-// Generate Last 7 Days
-function generateLast7Days() {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        days.push(date.toLocaleDateString('ar-SA', { weekday: 'short' }));
-    }
-    return days;
-}
-
-// Generate Random Data
-function generateRandomData(count, min, max) {
-    const data = [];
-    for (let i = 0; i < count; i++) {
-        data.push(Math.floor(Math.random() * (max - min + 1)) + min);
-    }
-    return data;
-}
-
-// Update Topics List
-function updateTopicsList() {
-    const topicsList = document.getElementById('topics-list');
-    if (!topicsList) return;
+// Settings Management
+const settingsManager = {
+    init() {
+        this.bindEvents();
+    },
     
-    const topics = {};
-    conversations.forEach(conv => {
-        const topic = conv.topic || 'عام';
-        topics[topic] = (topics[topic] || 0) + 1;
-    });
-    
-    const sortedTopics = Object.entries(topics)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5);
-    
-    topicsList.innerHTML = sortedTopics.map(([topic, count]) => `
-        <div class="topic-item">
-            <span class="topic-name">${topic}</span>
-            <span class="topic-count">${count}</span>
-        </div>
-    `).join('');
-}
-
-// Setup Modals
-function setupModals() {
-    // Close modals
-    document.querySelectorAll('.modal-close').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const modal = e.target.closest('.modal');
-            hideModal(modal.id);
+    bindEvents() {
+        // Tab switching
+        elements.tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                this.switchTab(tab);
+            });
         });
-    });
-    
-    // Close modals on outside click
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                hideModal(modal.id);
-            }
+        
+        // Form submissions
+        elements.profileForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.updateProfile();
         });
-    });
-}
-
-// Show Modal
-function showModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-// Hide Modal
-function hideModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
-}
-
-// Handle Logout
-async function handleLogout() {
-    try {
-        await signOut(auth);
-        window.location.href = 'index.html';
-    } catch (error) {
-        console.error('Logout error:', error);
-        showNotification('خطأ في تسجيل الخروج', 'error');
-    }
-}
-
-// Utility Functions
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-            <span>${message}</span>
-        </div>
-        <button class="notification-close">&times;</button>
-    `;
+        
+        elements.passwordForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.updatePassword();
+        });
+    },
     
-    // Add styles
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        z-index: 10000;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        max-width: 400px;
-        animation: slideInRight 0.3s ease-out;
-    `;
+    switchTab(tabName) {
+        // Update tab buttons
+        elements.tabBtns.forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Update tab content
+        elements.tabContents.forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+    },
     
-    document.body.appendChild(notification);
+    loadSettings() {
+        this.loadProfileSettings();
+    },
     
-    // Auto remove after 5 seconds
+    loadProfileSettings() {
+        if (userData) {
+            document.getElementById('display-name').value = userData.name || '';
+            document.getElementById('email').value = currentUser.email || '';
+            document.getElementById('bio').value = userData.bio || '';
+        }
+    },
+    
+    async updateProfile() {
+        const displayName = document.getElementById('display-name').value;
+        const bio = document.getElementById('bio').value;
+        
+        try {
+            // Update Firebase Auth profile
+            await updateProfile(currentUser, {
+                displayName: displayName
+            });
+            
+            // Update database
+            await update(ref(database, `users/${currentUser.uid}`), {
+                name: displayName,
+                bio: bio,
+                updatedAt: new Date().toISOString()
+            });
+            
+            utils.showNotification('تم تحديث الملف الشخصي بنجاح', 'success');
+            
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            utils.showNotification('خطأ في تحديث الملف الشخصي', 'error');
+        }
+    },
+    
+    async updatePassword() {
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        
+        if (newPassword !== confirmPassword) {
+            utils.showNotification('كلمات المرور غير متطابقة', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 6) {
+            utils.showNotification('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+            return;
+        }
+        
+        try {
+            // Re-authenticate user
+            const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+            await reauthenticateWithCredential(currentUser, credential);
+            
+            // Update password
+            await updatePassword(currentUser, newPassword);
+            
+            utils.showNotification('تم تحديث كلمة المرور بنجاح', 'success');
+            elements.passwordForm.reset();
+            
+        } catch (error) {
+            console.error('Error updating password:', error);
+            utils.showNotification('خطأ في تحديث كلمة المرور', 'error');
+        }
+    }
+};
+
+// Initialize Application
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize all managers
+    themeManager.init();
+    navigation.init();
+    authManager.init();
+    dashboardManager.init();
+    chatManager.init();
+    apiKeyManager.init();
+    analyticsManager.init();
+    settingsManager.init();
+    
+    // Hide loading screen
     setTimeout(() => {
-        notification.style.animation = 'slideOutRight 0.3s ease-in';
-        setTimeout(() => notification.remove(), 300);
-    }, 5000);
+        elements.loadingScreen.classList.add('hidden');
+    }, 1000);
     
-    // Close button
-    notification.querySelector('.notification-close').addEventListener('click', () => {
-        notification.style.animation = 'slideOutRight 0.3s ease-in';
-        setTimeout(() => notification.remove(), 300);
-    });
-}
+    console.log('Dashboard initialized successfully');
+});
 
-// Global Functions (for onclick handlers)
-window.switchSection = switchSection;
-window.showModal = showModal;
-window.hideModal = hideModal;
-window.copyApiKey = copyApiKey;
-window.showApiKeyDetails = showApiKeyDetails;
-window.deleteApiKey = deleteApiKey;
-window.loadConversation = loadConversation;
-window.deleteConversation = deleteConversation;
-
-// Add CSS for animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideInRight {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes slideOutRight {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
-    
-    .empty-state {
-        text-align: center;
-        padding: 3rem 2rem;
-        color: var(--gray-500);
-    }
-    
-    .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        color: var(--gray-400);
-    }
-    
-    .empty-state h3 {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: var(--gray-700);
-    }
-    
-    .empty-state p {
-        margin-bottom: 2rem;
-    }
-`;
-document.head.appendChild(style);
+// Make functions globally available for onclick handlers
+window.apiKeyManager = apiKeyManager;

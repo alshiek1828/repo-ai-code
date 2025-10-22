@@ -1,0 +1,30 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://relosity-ai.com/sitemap.xml
+
+# Disallow admin panel for non-authenticated users
+Disallow: /admin.html
+
+# Allow all other pages
+Allow: /index.html
+Allow: /dashboard.html
+Allow: /docs.html
+Allow: /style.css
+Allow: /dashboard.css
+Allow: /admin.css
+Allow: /docs.css
+Allow: /app.js
+Allow: /dashboard.js
+Allow: /admin.js
+Allow: /docs.js
+Allow: /manifest.json
+Allow: /sw.js
+Allow: /firebaseConfig.js
+
+# Allow assets
+Allow: /assets/
+
+# Crawl delay (optional)
+Crawl-delay: 1

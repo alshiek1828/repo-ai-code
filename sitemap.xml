@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+    
+    <!-- Homepage -->
+    <url>
+        <loc>https://relosity-ai.com/</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+    </url>
+    
+    <!-- Dashboard -->
+    <url>
+        <loc>https://relosity-ai.com/dashboard.html</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    
+    <!-- Admin Panel -->
+    <url>
+        <loc>https://relosity-ai.com/admin.html</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <!-- Documentation -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    
+    <!-- API Documentation -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#introduction</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <url>
+        <loc>https://relosity-ai.com/docs.html#getting-started</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <url>
+        <loc>https://relosity-ai.com/docs.html#chat-api</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <url>
+        <loc>https://relosity-ai.com/docs.html#image-generation</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <url>
+        <loc>https://relosity-ai.com/docs.html#embeddings</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <url>
+        <loc>https://relosity-ai.com/docs.html#moderation</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    
+    <!-- JavaScript Examples -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#javascript-examples</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    
+    <!-- Python Examples -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#python-examples</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    
+    <!-- PHP Examples -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#php-examples</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    
+    <!-- cURL Examples -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#curl-examples</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    
+    <!-- API Explorer -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#api-explorer</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    
+    <!-- Status -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#status</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.4</priority>
+    </url>
+    
+    <!-- Changelog -->
+    <url>
+        <loc>https://relosity-ai.com/docs.html#changelog</loc>
+        <lastmod>2024-01-15T10:00:00+00:00</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.4</priority>
+    </url>
+    
+</urlset>

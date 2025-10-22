@@ -1,0 +1,126 @@
+{
+  "name": "Relosity AI Platform",
+  "short_name": "Relosity AI",
+  "description": "منصة الذكاء الاصطناعي المتطورة والمتكاملة",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "/assets/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "الصفحة الرئيسية - سطح المكتب"
+    },
+    {
+      "src": "/assets/screenshots/mobile-1.png",
+      "sizes": "375x667",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "الصفحة الرئيسية - الهاتف المحمول"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "محادثة جديدة",
+      "short_name": "محادثة",
+      "description": "بدء محادثة جديدة مع الذكاء الاصطناعي",
+      "url": "/dashboard.html#chat",
+      "icons": [
+        {
+          "src": "/assets/icons/chat-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "مفاتيح API",
+      "short_name": "API",
+      "description": "إدارة مفاتيح API الخاصة بك",
+      "url": "/dashboard.html#api-keys",
+      "icons": [
+        {
+          "src": "/assets/icons/api-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "الإحصائيات",
+      "short_name": "إحصائيات",
+      "description": "عرض إحصائيات الاستخدام",
+      "url": "/dashboard.html#analytics",
+      "icons": [
+        {
+          "src": "/assets/icons/analytics-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
+}
